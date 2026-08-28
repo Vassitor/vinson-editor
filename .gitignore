@@ -1,0 +1,19 @@
+# Build output
+/build/
+/out/
+/dist/
+
+# Locally bootstrapped development tools (not project dependencies)
+/.tools/
+
+# CMake and IDE state
+CMakeUserPresets.json
+.cache/
+.clangd/
+.idea/
+.vscode/
+*.user
+
+# Platform files
+.DS_Store
+Thumbs.db

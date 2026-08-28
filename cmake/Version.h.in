@@ -1,0 +1,3 @@
+#pragma once
+
+#define VINSON_APP_VERSION "@PROJECT_VERSION@"

@@ -1,0 +1,56 @@
+# Release packaging
+
+## Windows portable package
+
+The supported release target is 64-bit Windows with MSVC 2022 or newer and a
+matching 64-bit Qt 6.5+ installation. From a Developer PowerShell whose
+`CMAKE_PREFIX_PATH` can locate Qt, run:
+
+```powershell
+.\scripts\package-windows.ps1
+```
+
+The script configures and builds Release, runs all tests, and invokes CPack.
+During CPack installation, Qt's CMake deployment API runs `windeployqt` and
+places the required Qt DLLs, compiler runtime, `qt.conf`, and platform plugins
+beside the application. The resulting ZIP and `.sha256` file are written to
+`build/release/`.
+
+Scintilla is compiled statically into `vinson-editor.exe`. Lexilla is pinned for
+future syntax support but is not linked by this plain-text release, so neither
+component needs a separate runtime DLL.
+
+## Linux portability package
+
+Run the equivalent Release pipeline with:
+
+```bash
+cmake --preset release
+cmake --build --preset release
+ctest --preset release
+cmake --build --preset release-package
+```
+
+The TGZ contains the executable, a root-level `vinson-editor` launcher, Qt
+libraries, discovered non-system runtime dependencies, platform plugins,
+documentation, and a SHA-256 checksum. Start the archive through the launcher;
+it supplies the relative library path needed by dynamically loaded plugins.
+The target machine must provide a compatible glibc and graphics/session
+libraries. An AppImage remains a later distribution target.
+
+## Clean-machine acceptance
+
+Validate the Windows ZIP on a 64-bit Windows machine or VM that does not have a
+Qt SDK on `PATH`:
+
+1. Verify the SHA-256 file, then extract the ZIP to a new directory.
+2. Start `vinson-editor.exe` without installing anything.
+3. Create, save, reopen, reload, and drag/drop a Unicode-path text file.
+4. Exercise Find/Replace, appearance controls, Always On Top, Frameless, and
+   Minimal modes.
+5. Close and reopen the application to confirm settings and geometry persist.
+6. Confirm `platforms/qwindows.dll` and the required Qt DLLs remain in the
+   extracted package and that no Qt SDK directory is added to `PATH`.
+
+Windows clean-machine execution is the release gate. Linux package smoke tests
+are a portability check and do not replace that gate.
