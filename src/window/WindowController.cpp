@@ -1,14 +1,17 @@
 #include "window/WindowController.h"
 
 #include "editor/EditorWidget.h"
+#include "window/NativeWindowAppearance.h"
 
 #include <QApplication>
 #include <QFontMetricsF>
 #include <QKeyEvent>
+#include <QLayout>
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QStatusBar>
+#include <QTimer>
 #include <QWindow>
 
 #include <algorithm>
@@ -72,6 +75,11 @@ bool WindowController::isMinimalMode() const noexcept
     return minimalMode_;
 }
 
+bool WindowController::isTaskbarVisible() const noexcept
+{
+    return taskbarVisible_;
+}
+
 bool WindowController::persistableFrameless() const noexcept
 {
     return minimalMode_ ? minimalUiState_.frameless : frameless_;
@@ -99,9 +107,93 @@ void WindowController::setFrameless(bool enabled)
     if (frameless_ == enabled) {
         return;
     }
+
+    bool restoreChrome = false;
+    bool menuBarVisible = false;
+    bool statusBarVisible = false;
+    if (enabled) {
+        framelessUiState_ = {
+            !window_->menuBar()->isHidden(),
+            !window_->statusBar()->isHidden(),
+            true,
+        };
+        window_->menuBar()->hide();
+        window_->statusBar()->hide();
+    } else if (!minimalMode_ && framelessUiState_.valid) {
+        restoreChrome = true;
+        menuBarVisible = framelessUiState_.menuBarVisible;
+        statusBarVisible = framelessUiState_.statusBarVisible;
+
+        // Restore child visibility before Qt recreates and shows the native
+        // framed window. QMainWindow then includes both bars in its first
+        // layout pass instead of leaving the status bar below the client area.
+        window_->menuBar()->setVisible(menuBarVisible);
+        window_->statusBar()->setVisible(statusBarVisible);
+        if (window_->layout() != nullptr) {
+            window_->layout()->invalidate();
+            window_->layout()->activate();
+        }
+    }
     frameless_ = enabled;
     clearResizeCursor();
     applyWindowFlag(Qt::FramelessWindowHint, enabled);
+    updateTaskbarVisibility();
+    if (restoreChrome) {
+        window_->menuBar()->setVisible(menuBarVisible);
+        window_->statusBar()->setVisible(statusBarVisible);
+        window_->statusBar()->updateGeometry();
+        if (window_->layout() != nullptr) {
+            window_->layout()->invalidate();
+            window_->layout()->activate();
+        }
+        framelessUiState_.valid = false;
+
+        // Windows can deliver one more layout pass after the native frame is
+        // recreated. Reapply the captured chrome state after that pass so the
+        // status bar cannot remain collapsed at the bottom of the window.
+        QTimer::singleShot(0, this,
+            [this, menuBarVisible, statusBarVisible] {
+                if (frameless_ || minimalMode_) {
+                    return;
+                }
+                window_->menuBar()->setVisible(menuBarVisible);
+                if (statusBarVisible) {
+                    // A plain setVisible(true) is a no-op when the native
+                    // frame transition left the status bar logically visible
+                    // but outside QMainWindow's active layout. Cycling its
+                    // visibility emits the layout requests needed to dock it
+                    // back into the bottom of the client area.
+                    window_->statusBar()->hide();
+                    window_->statusBar()->show();
+                    window_->statusBar()->raise();
+                } else {
+                    window_->statusBar()->hide();
+                }
+
+                window_->statusBar()->updateGeometry();
+                if (window_->layout() != nullptr) {
+                    window_->layout()->invalidate();
+                    window_->layout()->activate();
+                }
+
+                // On Windows, adding the native frame can reduce the client
+                // area without changing QWidget::size(). Qt consequently
+                // sends no resize event and QMainWindow keeps the status bar
+                // at the old, now-clipped client bottom. A one-pixel resize
+                // makes Qt recalculate the real framed client area; restore
+                // the requested outer size on the next event-loop turn.
+                if (!window_->isMaximized() && !window_->isFullScreen()) {
+                    const QSize framedSize = window_->size();
+                    window_->resize(framedSize.width(),
+                                    framedSize.height() + 1);
+                    QTimer::singleShot(0, this, [this, framedSize] {
+                        if (!frameless_ && !minimalMode_) {
+                            window_->resize(framedSize);
+                        }
+                    });
+                }
+            });
+    }
     emit framelessChanged(enabled);
 }
 
@@ -135,8 +227,8 @@ void WindowController::setMinimalMode(bool enabled)
         minimalUiState_ = {
             window_->minimumSize(),
             editor_->minimumSize(),
-            window_->menuBar()->isVisible(),
-            window_->statusBar()->isVisible(),
+            !window_->menuBar()->isHidden(),
+            !window_->statusBar()->isHidden(),
             transientPanel_ != nullptr && transientPanel_->isVisible(),
             editor_->areLineNumbersVisible(),
             editor_->hScrollBar(),
@@ -148,12 +240,10 @@ void WindowController::setMinimalMode(bool enabled)
         if (transientPanel_ != nullptr) {
             transientPanel_->hide();
         }
-        window_->menuBar()->hide();
-        window_->statusBar()->hide();
+        setFrameless(true);
         editor_->setLineNumbersVisible(false);
         editor_->setHScrollBar(false);
         editor_->setVScrollBar(false);
-        setFrameless(true);
         refreshMinimalMinimumSize();
     } else {
         minimalMode_ = false;
@@ -162,6 +252,7 @@ void WindowController::setMinimalMode(bool enabled)
         editor_->setLineNumbersVisible(minimalUiState_.lineNumbersVisible);
         editor_->setHScrollBar(minimalUiState_.horizontalScrollBarVisible);
         editor_->setVScrollBar(minimalUiState_.verticalScrollBarVisible);
+        setFrameless(minimalUiState_.frameless);
         window_->menuBar()->setVisible(minimalUiState_.menuBarVisible);
         window_->statusBar()->setVisible(minimalUiState_.statusBarVisible);
         if (transientPanel_ != nullptr) {
@@ -170,7 +261,6 @@ void WindowController::setMinimalMode(bool enabled)
         if (!minimalUiState_.windowGeometry.isEmpty()) {
             window_->restoreGeometry(minimalUiState_.windowGeometry);
         }
-        setFrameless(minimalUiState_.frameless);
     }
     emit minimalModeChanged(enabled);
 }
@@ -186,7 +276,8 @@ void WindowController::refreshMinimalMinimumSize()
         return;
     }
     const QFontMetricsF metrics(editor_->editorFont());
-    const int lineHeight = static_cast<int>(std::ceil(metrics.height())) + 4;
+    const int lineHeight = std::max(
+        1, static_cast<int>(std::ceil(editor_->textHeightF(0))));
     const int minimumWidth = std::max(80,
         static_cast<int>(std::ceil(metrics.horizontalAdvance(
             QStringLiteral("MMMM")))) + 8);
@@ -303,6 +394,10 @@ void WindowController::applyWindowFlag(Qt::WindowType flag, bool enabled)
         return;
     }
 
+    // setWindowFlag may recreate the HWND. Prepare per-pixel composition
+    // before showing the replacement framed window.
+    (void)window_->winId();
+    (void)setNativeBackgroundAlphaEnabled(window_, true);
     window_->setWindowState(state);
     window_->show();
     if (state == Qt::WindowNoState) {
@@ -311,6 +406,46 @@ void WindowController::applyWindowFlag(Qt::WindowType flag, bool enabled)
     if (focusedWidget != nullptr && focusedWidget->window() == window_) {
         focusedWidget->setFocus(Qt::OtherFocusReason);
     }
+    refreshEditorScrollBars();
+}
+
+void WindowController::refreshEditorScrollBars()
+{
+    if (editor_ == nullptr) {
+        return;
+    }
+
+    const auto refresh = [editor = QPointer<EditorWidget>(editor_)] {
+        if (editor == nullptr) {
+            return;
+        }
+        const bool horizontalVisible = editor->hScrollBar();
+        const bool verticalVisible = editor->vScrollBar();
+        if (horizontalVisible) {
+            editor->setHScrollBar(false);
+            editor->setHScrollBar(true);
+        }
+        if (verticalVisible) {
+            editor->setVScrollBar(false);
+            editor->setVScrollBar(true);
+        }
+        editor->updateGeometry();
+        editor->viewport()->update();
+    };
+    refresh();
+    QTimer::singleShot(0, editor_, refresh);
+}
+
+void WindowController::updateTaskbarVisibility()
+{
+    taskbarVisible_ = !frameless_ && !minimalMode_;
+    setNativeTaskbarVisible(window_, taskbarVisible_);
+
+    // setWindowFlag() can recreate the HWND. Reapply after queued native
+    // events so the replacement handle gets the same taskbar policy.
+    QTimer::singleShot(0, this, [this] {
+        setNativeTaskbarVisible(window_, !frameless_ && !minimalMode_);
+    });
 }
 
 void WindowController::updateResizeCursor(QWidget* widget, Qt::Edges edges)

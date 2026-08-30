@@ -7,6 +7,7 @@
 #include "settings/SettingsManager.h"
 #include "settings/ThemeManager.h"
 #include "ui/FindReplaceWidget.h"
+#include "ui/MenuAppearance.h"
 #include "ui/SettingsDialog.h"
 #include "window/WindowController.h"
 
@@ -71,6 +72,8 @@ MainWindow::MainWindow(QWidget* parent)
     windowController_->configureMinimalMode(editor_, findReplaceWidget_);
     connect(themeManager_, &ThemeManager::appearanceChanged,
             windowController_, &WindowController::refreshMinimalMinimumSize);
+    connect(windowController_, &WindowController::framelessChanged,
+            themeManager_, &ThemeManager::setFramelessMode);
     createMenus();
     connectFileManager();
     connectSearch();
@@ -117,6 +120,12 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    if (closeToTrayEnabled_) {
+        savePersistentSettings();
+        hide();
+        event->ignore();
+        return;
+    }
     if (closeAfterSave_ && !fileManager_->isBusy()) {
         savePersistentSettings();
         event->accept();
@@ -139,6 +148,41 @@ void MainWindow::closeEvent(QCloseEvent* event)
         closeAfterSave_ = true;
         close();
     });
+}
+
+void MainWindow::setCloseToTrayEnabled(bool enabled) noexcept
+{
+    closeToTrayEnabled_ = enabled;
+}
+
+const QKeySequence& MainWindow::bossKey() const noexcept
+{
+    return bossKey_;
+}
+
+void MainWindow::requestApplicationQuit()
+{
+    if (fileManager_->isBusy()) {
+        show();
+        raise();
+        activateWindow();
+        statusBar()->showMessage(
+            tr("Cancel or wait for the current file operation."), 4000);
+        return;
+    }
+
+    requestAfterUnsavedCheck([this] {
+        savePersistentSettings();
+        emit applicationQuitAccepted();
+    });
+}
+
+void MainWindow::handleBossKeyRegistrationFailure(
+    const QKeySequence& activeShortcut, const QString& message)
+{
+    bossKey_ = activeShortcut;
+    savePersistentSettings();
+    statusBar()->showMessage(message, 6000);
 }
 
 void MainWindow::dragEnterEvent(QDragEnterEvent* event)
@@ -191,7 +235,8 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     auto* quitAction = fileMenu->addAction(tr("E&xit"));
     quitAction->setShortcut(QKeySequence::Quit);
-    connect(quitAction, &QAction::triggered, this, &QWidget::close);
+    connect(quitAction, &QAction::triggered,
+            this, &MainWindow::requestApplicationQuit);
 
     auto* editMenu = menuBar()->addMenu(tr("&Edit"));
     auto addEditorAction = [this, editMenu](const QString& text,
@@ -280,6 +325,9 @@ void MainWindow::createMenus()
     framelessAction_->setObjectName(QStringLiteral("framelessAction"));
     framelessAction_->setCheckable(true);
     framelessAction_->setShortcut(QKeySequence(Qt::Key_F11));
+    // Keep the shortcut registered on the top-level window after frameless
+    // mode hides the menu bar that also owns this action.
+    addAction(framelessAction_);
     connect(framelessAction_, &QAction::toggled,
             windowController_, &WindowController::setFrameless);
     connect(windowController_, &WindowController::framelessChanged,
@@ -312,7 +360,33 @@ void MainWindow::createMenus()
     auto* settingsMenu = menuBar()->addMenu(tr("&Settings"));
     auto* appearanceAction = settingsMenu->addAction(tr("&Appearance…"));
     connect(appearanceAction, &QAction::triggered,
-            this, &MainWindow::showAppearanceSettings);
+            this, &MainWindow::showSettings);
+
+    settingsMenu->addSeparator();
+    increaseBackgroundAlphaAction_ =
+        settingsMenu->addAction(tr("Increase Background Opacity"));
+    increaseBackgroundAlphaAction_->setObjectName(
+        QStringLiteral("increaseBackgroundAlphaAction"));
+    increaseBackgroundAlphaAction_->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::Key_Up));
+    addAction(increaseBackgroundAlphaAction_);
+    connect(increaseBackgroundAlphaAction_, &QAction::triggered,
+            this, [this] { adjustBackgroundAlpha(5); });
+
+    decreaseBackgroundAlphaAction_ =
+        settingsMenu->addAction(tr("Decrease Background Opacity"));
+    decreaseBackgroundAlphaAction_->setObjectName(
+        QStringLiteral("decreaseBackgroundAlphaAction"));
+    decreaseBackgroundAlphaAction_->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::Key_Down));
+    addAction(decreaseBackgroundAlphaAction_);
+    connect(decreaseBackgroundAlphaAction_, &QAction::triggered,
+            this, [this] { adjustBackgroundAlpha(-5); });
+
+    for (QMenu* menu : {fileMenu, editMenu, searchMenu, viewMenu,
+                        settingsMenu}) {
+        applySoftMenuShadow(menu);
+    }
 }
 
 void MainWindow::connectSearch()
@@ -380,15 +454,19 @@ void MainWindow::showGoToLine()
     }
 }
 
-void MainWindow::showAppearanceSettings()
+void MainWindow::showSettings()
 {
     const Appearance original = themeManager_->appearance();
-    SettingsDialog dialog(original, this);
+    SettingsDialog dialog(original, bossKey_, this);
     connect(&dialog, &SettingsDialog::previewChanged,
             themeManager_, &ThemeManager::applyAppearance);
     if (dialog.exec() != QDialog::Accepted) {
         themeManager_->applyAppearance(original);
     } else {
+        if (bossKey_ != dialog.bossKey()) {
+            bossKey_ = dialog.bossKey();
+            emit bossKeyChanged(bossKey_);
+        }
         savePersistentSettings();
     }
 }
@@ -636,6 +714,7 @@ void MainWindow::restorePersistentSettings()
     editor_->setLineNumbersVisible(settings.lineNumbers);
     windowController_->setAlwaysOnTop(settings.alwaysOnTop);
     windowController_->setFrameless(settings.frameless);
+    bossKey_ = settings.bossKey;
     if (!settings.windowGeometry.isEmpty()) {
         restoreGeometry(settings.windowGeometry);
     }
@@ -657,11 +736,26 @@ void MainWindow::savePersistentSettings()
         lineNumberAction_->isChecked(),
         windowController_->isAlwaysOnTop(),
         windowController_->persistableFrameless(),
+        bossKey_,
     };
     if (!settingsManager_->save(settings)) {
         qWarning() << "Could not persist settings to"
                    << settingsManager_->fileName();
     }
+}
+
+void MainWindow::adjustBackgroundAlpha(int delta)
+{
+    Appearance appearance = themeManager_->appearance();
+    const int alpha = std::clamp(
+        appearance.backgroundColor.alpha() + delta, 0, 255);
+    if (alpha == appearance.backgroundColor.alpha()) {
+        return;
+    }
+    appearance.backgroundColor.setAlpha(alpha);
+    themeManager_->applyAppearance(appearance);
+    savePersistentSettings();
+    statusBar()->showMessage(tr("Background alpha: %1").arg(alpha), 1500);
 }
 
 void MainWindow::ensureWindowOnScreen()

@@ -3,6 +3,7 @@
 #include "settings/Appearance.h"
 
 #include <QByteArray>
+#include <QKeySequence>
 #include <QObject>
 #include <QString>
 
@@ -21,6 +22,7 @@ struct ApplicationSettings
     bool lineNumbers = true;
     bool alwaysOnTop = false;
     bool frameless = false;
+    QKeySequence bossKey;
 
     friend bool operator==(const ApplicationSettings&,
                            const ApplicationSettings&) = default;

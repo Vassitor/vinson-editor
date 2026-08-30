@@ -935,7 +935,7 @@ void FillLineRemainder(Surface *surface, const EditModel &model, const ViewStyle
 			base = vsDraw.styles[ll->LastStyle()].back;
 		}
 	}
-	surface->FillRectangleAligned(rcArea, Fill(base.Opaque()));
+	surface->FillRectangleAligned(rcArea, Fill(base));
 	if (drawEOLSelection && (vsDraw.selection.layer != Layer::Base)) {
 		// This may be translucent
 		surface->FillRectangleAligned(rcArea, selectionBack);
@@ -1103,7 +1103,7 @@ void EditView::DrawEOL(Surface *surface, const EditModel &model, const ViewStyle
 	} else if (const Style &styleLast = vsDraw.styles[ll->LastStyle()]; styleLast.eolFilled) {
 		base = styleLast.back;
 	}
-	surface->FillRectangleAligned(rcEOLIsSelected, Fill(base.Opaque()));
+	surface->FillRectangleAligned(rcEOLIsSelected, Fill(base));
 	if (drawEOLSelection && (vsDraw.selection.layer != Layer::Base)) {
 		surface->FillRectangleAligned(rcEOLIsSelected, selectionBack);
 	}

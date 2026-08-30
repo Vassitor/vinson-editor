@@ -24,6 +24,7 @@ public:
     [[nodiscard]] bool isFrameless() const noexcept;
     [[nodiscard]] bool isAlwaysOnTop() const noexcept;
     [[nodiscard]] bool isMinimalMode() const noexcept;
+    [[nodiscard]] bool isTaskbarVisible() const noexcept;
     [[nodiscard]] bool persistableFrameless() const noexcept;
     [[nodiscard]] QByteArray persistableGeometry() const;
     void configureMinimalMode(EditorWidget* editor, QWidget* transientPanel);
@@ -51,8 +52,17 @@ private:
     [[nodiscard]] bool beginSystemMove();
     [[nodiscard]] bool beginSystemResize(Qt::Edges edges);
     void applyWindowFlag(Qt::WindowType flag, bool enabled);
+    void refreshEditorScrollBars();
+    void updateTaskbarVisibility();
     void updateResizeCursor(QWidget* widget, Qt::Edges edges);
     void clearResizeCursor();
+
+    struct FramelessUiState
+    {
+        bool menuBarVisible = true;
+        bool statusBarVisible = true;
+        bool valid = false;
+    };
 
     struct MinimalUiState
     {
@@ -72,10 +82,12 @@ private:
     EditorWidget* editor_ = nullptr;
     QWidget* transientPanel_ = nullptr;
     QPointer<QWidget> resizeCursorWidget_;
+    FramelessUiState framelessUiState_;
     MinimalUiState minimalUiState_;
     bool frameless_ = false;
     bool alwaysOnTop_ = false;
     bool minimalMode_ = false;
+    bool taskbarVisible_ = true;
 };
 
 } // namespace vinson

@@ -13,6 +13,7 @@ class SettingsManagerTest final : public QObject
 
 private slots:
     void returnsDefaultsForMissingFile();
+    void migratesLegacyHorizontalScrollingDefault();
     void roundTripsValidatedSettings();
     void rejectsInvalidPersistedValues();
 };
@@ -24,8 +25,24 @@ void SettingsManagerTest::returnsDefaultsForMissingFile()
     vinson::SettingsManager manager(path);
 
     QVERIFY(manager.load() == vinson::SettingsManager::defaults());
+    QVERIFY(manager.load().wordWrap);
     QCOMPARE(manager.fileName(), path);
     QVERIFY(!QFileInfo::exists(path));
+}
+
+void SettingsManagerTest::migratesLegacyHorizontalScrollingDefault()
+{
+    QTemporaryDir directory;
+    const QString path = directory.filePath(QStringLiteral("legacy.ini"));
+    {
+        QSettings legacy(path, QSettings::IniFormat);
+        legacy.setValue(QStringLiteral("schema/version"), 1);
+        legacy.setValue(QStringLiteral("view/wordWrap"), false);
+        legacy.sync();
+    }
+
+    vinson::SettingsManager manager(path);
+    QVERIFY(manager.load().wordWrap);
 }
 
 void SettingsManagerTest::roundTripsValidatedSettings()
@@ -44,6 +61,7 @@ void SettingsManagerTest::roundTripsValidatedSettings()
     expected.lineNumbers = false;
     expected.alwaysOnTop = true;
     expected.frameless = true;
+    expected.bossKey = QKeySequence(QStringLiteral("Ctrl+Shift+F12"));
 
     {
         vinson::SettingsManager manager(path);
@@ -83,6 +101,8 @@ void SettingsManagerTest::rejectsInvalidPersistedValues()
                      QStringLiteral("invalid"));
         raw.setValue(QStringLiteral("window/frameless"),
                      QStringLiteral("invalid"));
+        raw.setValue(QStringLiteral("input/bossKey"),
+                     QStringLiteral("A"));
         raw.setValue(QStringLiteral("files/lastDirectory"),
                      directory.filePath(QStringLiteral("missing")));
         raw.sync();

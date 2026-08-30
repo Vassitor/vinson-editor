@@ -4,6 +4,7 @@
 
 #include <QObject>
 
+class QEvent;
 class QWidget;
 
 namespace vinson {
@@ -22,16 +23,25 @@ public:
 
 public slots:
     void applyAppearance(const Appearance& appearance);
+    void setFramelessMode(bool frameless);
 
 signals:
     void appearanceChanged(const vinson::Appearance& appearance);
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     [[nodiscard]] static Appearance normalized(Appearance appearance);
+    [[nodiscard]] QColor paintedBackgroundColor() const;
+    void applyScrollBarAppearance();
+    void applyWindowAppearance();
+    void applyNativeWindowAppearance();
 
     EditorWidget* editor_ = nullptr;
     QWidget* window_ = nullptr;
     Appearance appearance_;
+    bool framelessMode_ = false;
 };
 
 } // namespace vinson

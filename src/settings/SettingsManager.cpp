@@ -1,6 +1,7 @@
 #include "settings/SettingsManager.h"
 
 #include "settings/ThemeManager.h"
+#include "window/GlobalShortcut.h"
 
 #include <QColor>
 #include <QDir>
@@ -13,7 +14,7 @@
 namespace vinson {
 namespace {
 
-constexpr int settingsSchemaVersion = 1;
+constexpr int settingsSchemaVersion = 3;
 constexpr qsizetype maximumGeometryBytes = 64 * 1024;
 
 bool readBool(const QSettings& settings, const QString& key,
@@ -81,16 +82,20 @@ ApplicationSettings SettingsManager::defaults()
         ThemeManager::defaultAppearance(),
         {},
         QDir::homePath(),
-        false,
+        true,
         true,
         false,
         false,
+        GlobalShortcut::defaultShortcut(),
     };
 }
 
 ApplicationSettings SettingsManager::load() const
 {
     ApplicationSettings loaded = defaults();
+    bool validSchemaVersion = false;
+    const int storedSchemaVersion = settings_->value(
+        QStringLiteral("schema/version"), 0).toInt(&validSchemaVersion);
     loaded.appearance.font.setFamily(
         settings_->value(QStringLiteral("appearance/fontFamily"),
                          loaded.appearance.font.family()).toString());
@@ -117,12 +122,29 @@ ApplicationSettings SettingsManager::load() const
         QStringLiteral("window/geometry")).toByteArray();
     loaded.wordWrap = readBool(
         *settings_, QStringLiteral("view/wordWrap"), loaded.wordWrap);
+    if (!validSchemaVersion || storedSchemaVersion < 2) {
+        // Version 1 defaulted word wrapping off. Treat that legacy value as an
+        // old default during upgrade so existing users receive the corrected
+        // wrapped, non-horizontal-scrolling behavior as well.
+        loaded.wordWrap = true;
+    }
     loaded.lineNumbers = readBool(
         *settings_, QStringLiteral("view/lineNumbers"), loaded.lineNumbers);
     loaded.alwaysOnTop = readBool(
         *settings_, QStringLiteral("window/alwaysOnTop"), loaded.alwaysOnTop);
     loaded.frameless = readBool(
         *settings_, QStringLiteral("window/frameless"), loaded.frameless);
+    const QVariant bossKeyValue = settings_->value(
+        QStringLiteral("input/bossKey"));
+    if (bossKeyValue.isValid()) {
+        const QString bossKeyText = bossKeyValue.toString();
+        const QKeySequence bossKey = QKeySequence::fromString(
+            bossKeyText, QKeySequence::PortableText);
+        if (bossKeyText.isEmpty()
+            || GlobalShortcut::isSupportedShortcut(bossKey)) {
+            loaded.bossKey = bossKey;
+        }
+    }
     loaded.lastDirectory = settings_->value(
         QStringLiteral("files/lastDirectory"), loaded.lastDirectory).toString();
     return normalized(std::move(loaded));
@@ -147,6 +169,9 @@ bool SettingsManager::save(const ApplicationSettings& settings)
     settings_->setValue(QStringLiteral("window/geometry"), safe.windowGeometry);
     settings_->setValue(QStringLiteral("window/alwaysOnTop"), safe.alwaysOnTop);
     settings_->setValue(QStringLiteral("window/frameless"), safe.frameless);
+    settings_->setValue(
+        QStringLiteral("input/bossKey"),
+        safe.bossKey.toString(QKeySequence::PortableText));
     settings_->setValue(QStringLiteral("view/wordWrap"), safe.wordWrap);
     settings_->setValue(QStringLiteral("view/lineNumbers"), safe.lineNumbers);
     settings_->setValue(QStringLiteral("files/lastDirectory"),
@@ -194,6 +219,9 @@ ApplicationSettings SettingsManager::normalized(ApplicationSettings settings)
     }
     if (!QDir(settings.lastDirectory).exists()) {
         settings.lastDirectory = fallback.lastDirectory;
+    }
+    if (!GlobalShortcut::isSupportedShortcut(settings.bossKey)) {
+        settings.bossKey = fallback.bossKey;
     }
     return settings;
 }

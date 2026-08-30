@@ -2,8 +2,8 @@
 #include "window/WindowController.h"
 
 #include <QMainWindow>
-#include <QFontMetricsF>
 #include <QMenuBar>
+#include <QScrollBar>
 #include <QSignalSpy>
 #include <QStatusBar>
 #include <QVBoxLayout>
@@ -17,6 +17,7 @@ class WindowControllerTest final : public QObject
 
 private slots:
     void togglesWindowFlagsWithoutLosingSize();
+    void framelessModeHidesChromeAndRestoresScrollBars();
     void framelessEdgesExposeResizeCursor();
     void framelessModePreservesTextSelection();
     void minimalModeIsReversibleAndTracksFont();
@@ -35,9 +36,11 @@ void WindowControllerTest::togglesWindowFlagsWithoutLosingSize()
                             &vinson::WindowController::framelessChanged);
     QSignalSpy topmostSpy(&controller,
                           &vinson::WindowController::alwaysOnTopChanged);
+    QVERIFY(controller.isTaskbarVisible());
 
     controller.setFrameless(true);
     QVERIFY(controller.isFrameless());
+    QVERIFY(!controller.isTaskbarVisible());
     QVERIFY(window.windowFlags().testFlag(Qt::FramelessWindowHint));
     QCOMPARE(window.size(), originalSize);
     QCOMPARE(framelessSpy.count(), 1);
@@ -51,9 +54,50 @@ void WindowControllerTest::togglesWindowFlagsWithoutLosingSize()
 
     controller.toggleFrameless();
     QVERIFY(!controller.isFrameless());
+    QVERIFY(controller.isTaskbarVisible());
     QVERIFY(!window.windowFlags().testFlag(Qt::FramelessWindowHint));
     QVERIFY(window.windowFlags().testFlag(Qt::WindowStaysOnTopHint));
     QCOMPARE(framelessSpy.count(), 2);
+}
+
+void WindowControllerTest::framelessModeHidesChromeAndRestoresScrollBars()
+{
+    QMainWindow window;
+    auto* editor = new vinson::EditorWidget(&window);
+    QByteArray document;
+    for (int line = 0; line < 200; ++line) {
+        document += QByteArray(300, 'x') + '\n';
+    }
+    editor->setTextUtf8(document);
+    window.setCentralWidget(editor);
+    window.menuBar()->addMenu(QStringLiteral("Menu"));
+    window.statusBar()->showMessage(QStringLiteral("Status"));
+    window.resize(480, 200);
+    window.show();
+    QCoreApplication::processEvents();
+    vinson::WindowController controller(&window);
+    controller.configureMinimalMode(editor, nullptr);
+
+    QVERIFY(window.menuBar()->isVisible());
+    QVERIFY(window.statusBar()->isVisible());
+    QVERIFY(editor->verticalScrollBar()->isVisible());
+
+    controller.setFrameless(true);
+    QCoreApplication::processEvents();
+    QVERIFY(!window.menuBar()->isVisible());
+    QVERIFY(!window.statusBar()->isVisible());
+
+    controller.setFrameless(false);
+    QTRY_VERIFY(window.menuBar()->isVisible());
+    QTRY_VERIFY(window.statusBar()->isVisible());
+    QVERIFY(window.statusBar()->height() > 0);
+    QVERIFY(window.rect().intersects(window.statusBar()->geometry()));
+    QVERIFY(window.statusBar()->geometry().bottom() <= window.rect().bottom());
+    QVERIFY(!editor->hScrollBar());
+    QVERIFY(editor->vScrollBar());
+    QCOMPARE(editor->horizontalScrollBarPolicy(), Qt::ScrollBarAlwaysOff);
+    QCOMPARE(editor->verticalScrollBarPolicy(), Qt::ScrollBarAsNeeded);
+    QVERIFY(editor->verticalScrollBar()->isVisible());
 }
 
 void WindowControllerTest::framelessEdgesExposeResizeCursor()
@@ -121,7 +165,9 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
     window.statusBar()->showMessage(QStringLiteral("Status"));
     window.setMinimumSize(240, 180);
     editor->setMinimumSize(100, 80);
-    editor->setTextUtf8("minimal mode keeps the document");
+    const QByteArray minimalText(
+        "minimal mode keeps the document\nsecond line stays out of view");
+    editor->setTextUtf8(minimalText);
     window.resize(640, 360);
     window.show();
     QCoreApplication::processEvents();
@@ -137,6 +183,7 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
 
     QVERIFY(controller.isMinimalMode());
     QVERIFY(controller.isFrameless());
+    QVERIFY(!controller.isTaskbarVisible());
     QVERIFY(controller.isAlwaysOnTop());
     QVERIFY(!window.menuBar()->isVisible());
     QVERIFY(!window.statusBar()->isVisible());
@@ -149,12 +196,16 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
     controller.setFrameless(false);
     QVERIFY(controller.isFrameless());
     const int initialLineHeight = static_cast<int>(
-        std::ceil(QFontMetricsF(editor->editorFont()).height())) + 4;
+        std::ceil(editor->textHeightF(0)));
     QCOMPARE(window.minimumHeight(), initialLineHeight);
     QCOMPARE(editor->minimumHeight(), initialLineHeight);
     window.resize(window.minimumWidth(), window.minimumHeight());
     QCoreApplication::processEvents();
     QCOMPARE(window.height(), initialLineHeight);
+    QCOMPARE(editor->viewport()->height(), initialLineHeight);
+    const qsizetype secondLinePosition = minimalText.indexOf('\n') + 1;
+    QVERIFY(editor->pointYFromPosition(secondLinePosition)
+            >= editor->viewport()->height());
 
     QFont largerFont = editor->editorFont();
     largerFont.setPointSizeF(24.0);
@@ -165,17 +216,18 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
     controller.setMinimalMode(false);
     QVERIFY(!controller.isMinimalMode());
     QVERIFY(!controller.isFrameless());
+    QVERIFY(controller.isTaskbarVisible());
     QVERIFY(controller.isAlwaysOnTop());
     QVERIFY(window.menuBar()->isVisible());
     QVERIFY(window.statusBar()->isVisible());
     QVERIFY(panel->isVisible());
     QVERIFY(editor->areLineNumbersVisible());
-    QVERIFY(editor->hScrollBar());
+    QVERIFY(!editor->hScrollBar());
     QVERIFY(editor->vScrollBar());
     QCOMPARE(window.minimumSize(), originalWindowMinimum);
     QCOMPARE(editor->minimumSize(), originalEditorMinimum);
     QCOMPARE(window.size(), originalWindowSize);
-    QCOMPARE(editor->textUtf8(), QByteArray("minimal mode keeps the document"));
+    QCOMPARE(editor->textUtf8(), minimalText);
     QVERIFY(!editor->modify());
 
     controller.setFrameless(true);

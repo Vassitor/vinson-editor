@@ -1,12 +1,17 @@
 #include "editor/EditorWidget.h"
 #include "settings/ThemeManager.h"
 #include "ui/SettingsDialog.h"
+#include "window/NativeWindowAppearance.h"
 
 #include <QImage>
 #include <QDoubleSpinBox>
+#include <QMainWindow>
+#include <QKeySequenceEdit>
+#include <QMenuBar>
 #include <QPainter>
 #include <QSignalSpy>
 #include <QSlider>
+#include <QStatusBar>
 #include <QVBoxLayout>
 #include <QtTest>
 
@@ -18,7 +23,9 @@ class AppearanceTest final : public QObject
 
 private slots:
     void appliesAppearanceWithoutChangingDocument();
+    void appliesReadableWindowChromePalette();
     void transparentBackgroundKeepsTextVisible();
+    void nativeFramedBackgroundAlphaIsAvailable();
     void dialogPreviewsBackgroundAlpha();
 };
 
@@ -48,10 +55,23 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     QVERIFY(modifiedSpy.isEmpty());
     QCOMPARE(editor->editorFont().pointSizeF(), 18.5);
     QCOMPARE(editor->textColor(), QColor(10, 20, 30, 255));
+    QCOMPARE(manager.appearance().backgroundColor, QColor(40, 50, 60, 127));
     QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
     QCOMPARE(editor->cursorColor(), QColor(70, 80, 90, 255));
     QCOMPARE(editor->selectionTextColor(), QColor(100, 110, 120, 255));
     QCOMPARE(window.palette().color(QPalette::Window), QColor(40, 50, 60, 127));
+    QCOMPARE(window.windowOpacity(), 1.0);
+    QVERIFY(!editor->bufferedDraw());
+
+    manager.setFramelessMode(true);
+    QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
+    QCOMPARE(window.palette().color(QPalette::Window), QColor(40, 50, 60, 127));
+    QCOMPARE(window.windowOpacity(), 1.0);
+    QVERIFY(!editor->bufferedDraw());
+    QVERIFY(editor->styleSheet().contains(QStringLiteral("#7f28323c")));
+
+    manager.setFramelessMode(false);
+    QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
     QCOMPARE(window.windowOpacity(), 1.0);
     QVERIFY(!editor->bufferedDraw());
 
@@ -60,6 +80,36 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     QVERIFY(editor->bufferedDraw());
     QCOMPARE(editor->textUtf8(), QByteArray("appearance keeps this text"));
     QVERIFY(modifiedSpy.isEmpty());
+}
+
+void AppearanceTest::appliesReadableWindowChromePalette()
+{
+    QMainWindow window;
+    auto* editor = new vinson::EditorWidget(&window);
+    window.setCentralWidget(editor);
+    window.menuBar()->addMenu(QStringLiteral("File"));
+    window.statusBar()->showMessage(QStringLiteral("Ready"));
+    vinson::ThemeManager manager(editor, &window);
+
+    vinson::Appearance appearance = manager.appearance();
+    appearance.backgroundColor = QColor(240, 230, 220);
+    appearance.textColor = QColor(20, 30, 40);
+    manager.applyAppearance(appearance);
+
+    QCOMPARE(window.palette().color(QPalette::Window),
+             appearance.backgroundColor);
+    QCOMPARE(window.palette().color(QPalette::WindowText),
+             appearance.textColor);
+    QCOMPARE(window.menuBar()->palette().color(QPalette::ButtonText),
+             appearance.textColor);
+    QCOMPARE(window.statusBar()->palette().color(QPalette::WindowText),
+             appearance.textColor);
+    QVERIFY(window.menuBar()->autoFillBackground());
+    QVERIFY(window.statusBar()->autoFillBackground());
+    QVERIFY(editor->styleSheet().contains(QStringLiteral("QScrollBar:vertical")));
+    QVERIFY(editor->styleSheet().contains(QStringLiteral("QScrollBar:horizontal")));
+    QVERIFY(editor->styleSheet().contains(QStringLiteral("background: #f0e6dc")));
+    QVERIFY(editor->styleSheet().contains(QStringLiteral("border-radius: 5px")));
 }
 
 void AppearanceTest::transparentBackgroundKeepsTextVisible()
@@ -72,13 +122,14 @@ void AppearanceTest::transparentBackgroundKeepsTextVisible()
     layout->addWidget(editor);
     vinson::ThemeManager manager(editor, &window);
 
-    editor->setLineNumbersVisible(false);
+    editor->setLineNumbersVisible(true);
     editor->setHScrollBar(false);
     editor->setVScrollBar(false);
     editor->setTextUtf8("Visible");
     vinson::Appearance appearance = manager.appearance();
     appearance.textColor = QColor(255, 255, 255);
     appearance.backgroundColor = QColor(12, 34, 56, 0);
+    manager.setFramelessMode(true);
     manager.applyAppearance(appearance);
 
     window.resize(320, 120);
@@ -104,18 +155,43 @@ void AppearanceTest::transparentBackgroundKeepsTextVisible()
     QCOMPARE(minimumAlpha, 0);
     QCOMPARE(maximumAlpha, 255);
     QVERIFY(opaquePixels > 30);
+    QCOMPARE(qAlpha(image.pixel(image.width() - 20, image.height() - 20)), 0);
+    QCOMPARE(qAlpha(image.pixel(image.width() - 20,
+                                static_cast<int>(editor->textHeightF(0) / 2))), 0);
+    QCOMPARE(qAlpha(image.pixel(4, image.height() - 20)), 0);
     QCOMPARE(editor->textColor().alpha(), 255);
+}
+
+void AppearanceTest::nativeFramedBackgroundAlphaIsAvailable()
+{
+#if defined(Q_OS_WIN)
+    if (QGuiApplication::platformName() != QStringLiteral("windows")) {
+        QSKIP("Native DWM verification requires the Windows QPA plugin.");
+    }
+
+    QWidget window;
+    window.setAttribute(Qt::WA_TranslucentBackground);
+    (void)window.winId();
+    QVERIFY(vinson::setNativeBackgroundAlphaEnabled(&window, true));
+#else
+    QSKIP("Native DWM verification is Windows-only.");
+#endif
 }
 
 void AppearanceTest::dialogPreviewsBackgroundAlpha()
 {
     vinson::Appearance appearance = vinson::ThemeManager::defaultAppearance();
-    vinson::SettingsDialog dialog(appearance);
+    const QKeySequence bossKey(QStringLiteral("Ctrl+Alt+Space"));
+    vinson::SettingsDialog dialog(appearance, bossKey);
     QSignalSpy previewSpy(&dialog, &vinson::SettingsDialog::previewChanged);
     auto* fontSize = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("fontSize"));
     auto* alpha = dialog.findChild<QSlider*>(QStringLiteral("backgroundAlpha"));
     QVERIFY(fontSize != nullptr);
     QVERIFY(alpha != nullptr);
+    auto* bossKeyEdit = dialog.findChild<QKeySequenceEdit*>(
+        QStringLiteral("bossKey"));
+    QVERIFY(bossKeyEdit != nullptr);
+    QCOMPARE(dialog.bossKey(), bossKey);
 
     fontSize->setValue(20.0);
     QCOMPARE(dialog.appearance().font.pointSizeF(), 20.0);
@@ -125,6 +201,11 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
 
     QCOMPARE(dialog.appearance().backgroundColor.alpha(), 0);
     QCOMPARE(previewSpy.count(), 1);
+
+    bossKeyEdit->setKeySequence(
+        QKeySequence(QStringLiteral("Ctrl+Shift+F12")));
+    QCOMPARE(dialog.bossKey(),
+             QKeySequence(QStringLiteral("Ctrl+Shift+F12")));
 }
 
 QTEST_MAIN(AppearanceTest)

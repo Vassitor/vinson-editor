@@ -4,10 +4,14 @@
 #include "window/WindowController.h"
 
 #include <QAction>
+#include <QGraphicsDropShadowEffect>
 #include <QGuiApplication>
 #include <QMainWindow>
+#include <QMenu>
+#include <QMenuBar>
 #include <QScreen>
 #include <QSettings>
+#include <QStatusBar>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -19,7 +23,14 @@ class MainWindowPersistenceTest final : public QObject
 
 private slots:
     void initTestCase();
+    void usesWrappedTextByDefault();
+    void migratesLegacyHorizontalScrollingDefault();
     void restoresPersistedApplicationState();
+    void framelessShortcutRemainsAvailableWithHiddenMenuBar();
+    void backgroundOpacityShortcutsArePersistent();
+    void titleBarMenusUseSoftShadows();
+    void closeToTrayPreservesUnsavedDocument();
+    void explicitQuitIsSeparateFromCloseToTray();
     void savesChangedApplicationState();
     void relocatesGeometryFromMissingDisplay();
 
@@ -40,6 +51,38 @@ void MainWindowPersistenceTest::useSettingsDirectory(const QString& path)
     QSettings settings;
     settings.clear();
     settings.sync();
+}
+
+void MainWindowPersistenceTest::usesWrappedTextByDefault()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    QVERIFY(editor != nullptr);
+    QVERIFY(editor->isWordWrapEnabled());
+    QVERIFY(!editor->hScrollBar());
+}
+
+void MainWindowPersistenceTest::migratesLegacyHorizontalScrollingDefault()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("schema/version"), 1);
+        settings.setValue(QStringLiteral("view/wordWrap"), false);
+        settings.sync();
+    }
+
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    QVERIFY(editor != nullptr);
+    QVERIFY(editor->isWordWrapEnabled());
+    QVERIFY(!editor->hScrollBar());
 }
 
 void MainWindowPersistenceTest::restoresPersistedApplicationState()
@@ -65,6 +108,8 @@ void MainWindowPersistenceTest::restoresPersistedApplicationState()
         settings.setValue(QStringLiteral("view/lineNumbers"), false);
         settings.setValue(QStringLiteral("window/alwaysOnTop"), true);
         settings.setValue(QStringLiteral("window/frameless"), true);
+        settings.setValue(QStringLiteral("input/bossKey"),
+                          QStringLiteral("Ctrl+Shift+F12"));
         settings.setValue(QStringLiteral("files/lastDirectory"), directory.path());
         settings.sync();
     }
@@ -90,6 +135,141 @@ void MainWindowPersistenceTest::restoresPersistedApplicationState()
     QVERIFY(!lines->isChecked());
     QVERIFY(controller->isAlwaysOnTop());
     QVERIFY(controller->isFrameless());
+    QCOMPARE(window.bossKey(),
+             QKeySequence(QStringLiteral("Ctrl+Shift+F12")));
+    QVERIFY(window.menuBar()->isHidden());
+    QVERIFY(window.statusBar()->isHidden());
+    controller->setFrameless(false);
+    QVERIFY(!window.menuBar()->isHidden());
+    QVERIFY(!window.statusBar()->isHidden());
+}
+
+void MainWindowPersistenceTest::framelessShortcutRemainsAvailableWithHiddenMenuBar()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* controller = window.findChild<vinson::WindowController*>();
+    auto* action = window.findChild<QAction*>(QStringLiteral("framelessAction"));
+    QVERIFY(controller != nullptr);
+    QVERIFY(action != nullptr);
+    QVERIFY(window.actions().contains(action));
+
+    window.show();
+    QCoreApplication::processEvents();
+    QTest::keyClick(&window, Qt::Key_F11);
+    QTRY_VERIFY(controller->isFrameless());
+    QVERIFY(window.menuBar()->isHidden());
+
+    QTest::keyClick(&window, Qt::Key_F11);
+    QTRY_VERIFY(!controller->isFrameless());
+    QVERIFY(!window.menuBar()->isHidden());
+    QTRY_VERIFY(window.statusBar()->isVisible());
+    QVERIFY(window.statusBar()->height() > 0);
+    QVERIFY(window.rect().intersects(window.statusBar()->geometry()));
+    QVERIFY(window.statusBar()->geometry().bottom() <= window.rect().bottom());
+}
+
+void MainWindowPersistenceTest::backgroundOpacityShortcutsArePersistent()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    auto* theme = window.findChild<vinson::ThemeManager*>();
+    auto* increase = window.findChild<QAction*>(
+        QStringLiteral("increaseBackgroundAlphaAction"));
+    auto* decrease = window.findChild<QAction*>(
+        QStringLiteral("decreaseBackgroundAlphaAction"));
+    QVERIFY(editor != nullptr);
+    QVERIFY(theme != nullptr);
+    QVERIFY(increase != nullptr);
+    QVERIFY(decrease != nullptr);
+    QCOMPARE(increase->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_Up));
+    QCOMPARE(decrease->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_Down));
+    QVERIFY(window.actions().contains(increase));
+    QVERIFY(window.actions().contains(decrease));
+
+    editor->setTextUtf8("shortcut keeps document text");
+    window.show();
+    editor->QWidget::setFocus();
+    QCoreApplication::processEvents();
+
+    QTest::keyClick(editor, Qt::Key_Down, Qt::ControlModifier);
+    QTRY_COMPARE(theme->appearance().backgroundColor.alpha(), 250);
+    QCOMPARE(editor->textUtf8(), QByteArray("shortcut keeps document text"));
+    QVERIFY(!editor->modify());
+    {
+        QSettings settings;
+        QCOMPARE(settings.value(QStringLiteral("appearance/backgroundColor"))
+                     .toString().left(3),
+                 QStringLiteral("#fa"));
+    }
+
+    QTest::keyClick(editor, Qt::Key_Up, Qt::ControlModifier);
+    QTRY_COMPARE(theme->appearance().backgroundColor.alpha(), 255);
+    QCOMPARE(editor->textUtf8(), QByteArray("shortcut keeps document text"));
+}
+
+void MainWindowPersistenceTest::titleBarMenusUseSoftShadows()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    int menuCount = 0;
+    for (QAction* action : window.menuBar()->actions()) {
+        QMenu* menu = action->menu();
+        if (menu == nullptr) {
+            continue;
+        }
+        ++menuCount;
+        auto* shadow = qobject_cast<QGraphicsDropShadowEffect*>(
+            menu->graphicsEffect());
+        QVERIFY(shadow != nullptr);
+        QVERIFY(shadow->blurRadius() >= 20.0);
+        QVERIFY(shadow->color().alpha() > 0);
+    }
+    QCOMPARE(menuCount, 5);
+}
+
+void MainWindowPersistenceTest::closeToTrayPreservesUnsavedDocument()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    QVERIFY(editor != nullptr);
+    window.setCloseToTrayEnabled(true);
+    window.show();
+    editor->QWidget::setFocus();
+    QTest::keyClicks(editor, QStringLiteral("unsaved tray draft"));
+    QTRY_VERIFY(editor->modify());
+
+    window.close();
+    QVERIFY(!window.isVisible());
+    QCOMPARE(editor->textUtf8(), QByteArray("unsaved tray draft"));
+    QVERIFY(editor->modify());
+}
+
+void MainWindowPersistenceTest::explicitQuitIsSeparateFromCloseToTray()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    window.setCloseToTrayEnabled(true);
+    QSignalSpy quitSpy(&window, &vinson::MainWindow::applicationQuitAccepted);
+    window.requestApplicationQuit();
+    QCOMPARE(quitSpy.count(), 1);
 }
 
 void MainWindowPersistenceTest::savesChangedApplicationState()

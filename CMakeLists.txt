@@ -19,6 +19,16 @@ set(CMAKE_AUTOUIC ON)
 option(VINSON_BUILD_TESTS "Build the automated test suite" ON)
 option(VINSON_BUILD_BENCHMARKS "Build manual performance benchmarks" ON)
 
+# Qt captures the GNUInstallDirs values when its Core package is loaded. A
+# Windows portable archive must therefore select its flat runtime layout before
+# find_package(Qt6), otherwise windeployqt places DLLs in bin/ while the
+# application executable is installed at the archive root.
+include(GNUInstallDirs)
+if(WIN32)
+    set(CMAKE_INSTALL_BINDIR ".")
+    set(CMAKE_INSTALL_LIBDIR ".")
+endif()
+
 # The Linux archive uses a launcher-provided library path. Set this before Qt
 # targets are created because Qt generates shared deployment support lazily.
 if(UNIX AND NOT APPLE)
@@ -26,16 +36,8 @@ if(UNIX AND NOT APPLE)
         "Use the portable launcher instead of rewriting plugin RPATHs" FORCE)
 endif()
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Core5Compat Gui Widgets)
-
-include(GNUInstallDirs)
-
-# A Windows portable archive must keep the executable and its deployed DLLs in
-# one directory. Other desktop platforms retain the conventional bin/lib tree.
-if(WIN32)
-    set(CMAKE_INSTALL_BINDIR ".")
-    set(CMAKE_INSTALL_LIBDIR ".")
-endif()
+find_package(Qt6 6.5 REQUIRED COMPONENTS
+    Core Core5Compat Gui Widgets LinguistTools)
 
 include(cmake/Scintilla.cmake)
 
@@ -65,14 +67,24 @@ add_library(vinson_editor_ui STATIC
     src/search/SearchController.h
     src/search/SearchTypes.h
     src/settings/Appearance.h
+    src/settings/Localization.cpp
+    src/settings/Localization.h
     src/settings/SettingsManager.cpp
     src/settings/SettingsManager.h
     src/settings/ThemeManager.cpp
     src/settings/ThemeManager.h
     src/ui/FindReplaceWidget.cpp
     src/ui/FindReplaceWidget.h
+    src/ui/MenuAppearance.cpp
+    src/ui/MenuAppearance.h
     src/ui/SettingsDialog.cpp
     src/ui/SettingsDialog.h
+    src/window/NativeWindowAppearance.cpp
+    src/window/NativeWindowAppearance.h
+    src/window/GlobalShortcut.cpp
+    src/window/GlobalShortcut.h
+    src/window/TrayController.cpp
+    src/window/TrayController.h
     src/window/WindowController.cpp
     src/window/WindowController.h
     src/window/MainWindow.cpp
@@ -82,10 +94,22 @@ target_include_directories(vinson_editor_ui PUBLIC src)
 target_link_libraries(vinson_editor_ui
     PUBLIC vinson_core Qt6::Widgets Scintilla::Scintilla)
 
+if(WIN32)
+    target_link_libraries(vinson_editor_ui PRIVATE dwmapi)
+endif()
+
+qt_add_translations(vinson_editor_ui
+    SOURCE_TARGETS vinson_core vinson_editor_ui
+    TS_FILES resources/i18n/vinson-editor_zh_CN.ts
+    RESOURCE_PREFIX "/i18n"
+    MERGE_QT_TRANSLATIONS
+    QT_TRANSLATION_CATALOGS qtbase)
+
 add_executable(vinson-editor
     src/main.cpp
     src/app/Application.cpp
     src/app/Application.h
+    resources/resources.qrc
 )
 
 configure_file(cmake/Version.h.in generated/app/Version.h @ONLY)

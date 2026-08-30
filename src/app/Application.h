@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QApplication>
+#include <QTranslator>
 
 namespace vinson {
 
@@ -12,6 +13,9 @@ public:
     Application(int& argc, char** argv);
 
     int run();
+
+private:
+    QTranslator translator_;
 };
 
 } // namespace vinson

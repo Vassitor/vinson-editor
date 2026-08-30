@@ -4,6 +4,7 @@
 #include "largefile/LargeFilePolicy.h"
 
 #include <QMainWindow>
+#include <QKeySequence>
 
 #include <functional>
 
@@ -31,6 +32,18 @@ class MainWindow final : public QMainWindow
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    void setCloseToTrayEnabled(bool enabled) noexcept;
+    [[nodiscard]] const QKeySequence& bossKey() const noexcept;
+
+public slots:
+    void requestApplicationQuit();
+    void showSettings();
+    void handleBossKeyRegistrationFailure(
+        const QKeySequence& activeShortcut, const QString& message);
+
+signals:
+    void applicationQuitAccepted();
+    void bossKeyChanged(const QKeySequence& shortcut);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -43,7 +56,6 @@ private:
     void connectSearch();
     void showFindReplace(bool replaceMode);
     void showGoToLine();
-    void showAppearanceSettings();
     void newDocument();
     void chooseAndOpenFile();
     void requestOpenFile(const QString& path);
@@ -58,6 +70,7 @@ private:
     void applyLargeFileMode(LargeFileMode mode);
     void restorePersistentSettings();
     void savePersistentSettings();
+    void adjustBackgroundAlpha(int delta);
     void ensureWindowOnScreen();
     void handleLoadFailureState();
     [[nodiscard]] QString chooseSavePath();
@@ -87,15 +100,19 @@ private:
     QAction* lineNumberAction_ = nullptr;
     QAction* framelessAction_ = nullptr;
     QAction* minimalModeAction_ = nullptr;
+    QAction* increaseBackgroundAlphaAction_ = nullptr;
+    QAction* decreaseBackgroundAlphaAction_ = nullptr;
     EditorDocument document_;
     std::function<void()> pendingAfterSave_;
     bool loadReplacedDocument_ = false;
     bool closeAfterSave_ = false;
+    bool closeToTrayEnabled_ = false;
     bool preferredWordWrap_ = false;
     bool restoringSettings_ = false;
     LargeFileMode largeFileMode_ = LargeFileMode::Normal;
     qint64 currentLine_ = 1;
     QString lastDirectory_;
+    QKeySequence bossKey_;
 };
 
 } // namespace vinson

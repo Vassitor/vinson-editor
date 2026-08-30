@@ -3,9 +3,11 @@
 #include "settings/Appearance.h"
 
 #include <QDialog>
+#include <QKeySequence>
 
 class QDoubleSpinBox;
 class QFontComboBox;
+class QKeySequenceEdit;
 class QPushButton;
 class QSlider;
 class QSpinBox;
@@ -18,10 +20,13 @@ class SettingsDialog final : public QDialog
 
 public:
     explicit SettingsDialog(const Appearance& appearance,
+                            const QKeySequence& bossKey,
                             QWidget* parent = nullptr);
 
     [[nodiscard]] const Appearance& appearance() const noexcept;
+    [[nodiscard]] const QKeySequence& bossKey() const noexcept;
     void setAppearance(const Appearance& appearance);
+    void setBossKey(const QKeySequence& bossKey);
 
 signals:
     void previewChanged(const vinson::Appearance& appearance);
@@ -33,6 +38,7 @@ private:
     static void styleColorButton(QPushButton* button, const QColor& color);
 
     Appearance appearance_;
+    QKeySequence bossKey_;
     QFontComboBox* fontCombo_ = nullptr;
     QDoubleSpinBox* fontSizeSpin_ = nullptr;
     QPushButton* textColorButton_ = nullptr;
@@ -41,6 +47,7 @@ private:
     QPushButton* selectionTextColorButton_ = nullptr;
     QSlider* backgroundAlphaSlider_ = nullptr;
     QSpinBox* backgroundAlphaSpin_ = nullptr;
+    QKeySequenceEdit* bossKeyEdit_ = nullptr;
     bool updating_ = false;
 };
 

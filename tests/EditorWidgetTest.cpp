@@ -10,12 +10,25 @@ class EditorWidgetTest final : public QObject
 
 private slots:
     void storesUtf8Text();
+    void defaultsToWrappedTextWithoutHorizontalScrolling();
     void acceptsKeyboardInput();
     void togglesViewOptions();
     void createsLargeDocumentBeforeLoading();
     void readsBoundedTextRanges();
     void searchesAcrossResponsiveSliceBoundary();
 };
+
+void EditorWidgetTest::defaultsToWrappedTextWithoutHorizontalScrolling()
+{
+    vinson::EditorWidget editor;
+
+    QVERIFY(editor.isWordWrapEnabled());
+    QVERIFY(!editor.hScrollBar());
+
+    editor.setWordWrapEnabled(false);
+    QVERIFY(!editor.isWordWrapEnabled());
+    QVERIFY(editor.hScrollBar());
+}
 
 void EditorWidgetTest::storesUtf8Text()
 {

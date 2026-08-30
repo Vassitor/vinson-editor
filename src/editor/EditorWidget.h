@@ -84,6 +84,7 @@ protected:
 private:
     static sptr_t scintillaColor(const QColor& color);
     static sptr_t scintillaRgbaStyleColor(const QColor& color);
+    void restoreLineNumberStyle();
     [[nodiscard]] bool replaceDocument(LargeFileMode mode,
                                        qint64 initialBytes = 0);
     void refreshLineNumberMargin();

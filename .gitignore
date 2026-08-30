@@ -5,6 +5,7 @@
 
 # Locally bootstrapped development tools (not project dependencies)
 /.tools/
+/.build-tools/
 
 # CMake and IDE state
 CMakeUserPresets.json

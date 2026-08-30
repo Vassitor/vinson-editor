@@ -33,6 +33,7 @@ EditorWidget::EditorWidget(QWidget* parent)
     setCodePage(Scintilla::CpUtf8);
     setMarginTypeN(0, static_cast<sptr_t>(Scintilla::MarginType::Number));
     setScrollWidthTracking(true);
+    setWordWrapEnabled(true);
 
     QFont editorFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     editorFont.setPointSize(12);
@@ -192,6 +193,7 @@ void EditorWidget::setEditorFont(const QFont& font)
         : static_cast<sptr_t>(Scintilla::FontWeight::Normal));
     styleSetItalic(defaultStyle, editorFont_.italic());
     styleClearAll();
+    restoreLineNumberStyle();
     refreshLineNumberMargin();
     updateGeometry();
 }
@@ -203,6 +205,7 @@ void EditorWidget::setTextColor(const QColor& color)
     styleSetFore(styleIndex(Scintilla::StylesCommon::Default),
                  scintillaColor(textColor_));
     styleClearAll();
+    restoreLineNumberStyle();
 }
 
 void EditorWidget::setBackgroundColor(const QColor& color)
@@ -211,6 +214,7 @@ void EditorWidget::setBackgroundColor(const QColor& color)
     styleSetBack(styleIndex(Scintilla::StylesCommon::Default),
                  scintillaRgbaStyleColor(backgroundColor_));
     styleClearAll();
+    restoreLineNumberStyle();
     setBufferedDraw(backgroundColor_.alpha() == 255);
     viewport()->update();
 }
@@ -258,6 +262,7 @@ void EditorWidget::setWordWrapEnabled(bool enabled)
 {
     setWrapMode(static_cast<sptr_t>(enabled ? Scintilla::Wrap::Word
                                             : Scintilla::Wrap::None));
+    setHScrollBar(!enabled);
 }
 
 bool EditorWidget::isWordWrapEnabled() const
@@ -480,6 +485,19 @@ sptr_t EditorWidget::scintillaRgbaStyleColor(const QColor& color)
         | (static_cast<quint64>(color.blue()) << 16)
         | (static_cast<quint64>(color.alpha()) << 24);
     return static_cast<sptr_t>(rgbaMarker | rgba);
+}
+
+void EditorWidget::restoreLineNumberStyle()
+{
+    const auto lineNumberStyle =
+        styleIndex(Scintilla::StylesCommon::LineNumber);
+    if (textColor_.isValid()) {
+        styleSetFore(lineNumberStyle, scintillaColor(textColor_));
+    }
+    if (backgroundColor_.isValid()) {
+        styleSetBack(lineNumberStyle,
+                     scintillaRgbaStyleColor(backgroundColor_));
+    }
 }
 
 bool EditorWidget::replaceDocument(LargeFileMode mode, qint64 initialBytes)

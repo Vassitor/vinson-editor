@@ -1,6 +1,7 @@
 #include "ui/SettingsDialog.h"
 
 #include "settings/ThemeManager.h"
+#include "window/GlobalShortcut.h"
 
 #include <QApplication>
 #include <QColorDialog>
@@ -10,6 +11,8 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QKeySequenceEdit>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
@@ -17,7 +20,8 @@
 
 namespace vinson {
 
-SettingsDialog::SettingsDialog(const Appearance& appearance, QWidget* parent)
+SettingsDialog::SettingsDialog(const Appearance& appearance,
+                               const QKeySequence& bossKey, QWidget* parent)
     : QDialog(parent)
     , fontCombo_(new QFontComboBox(this))
     , fontSizeSpin_(new QDoubleSpinBox(this))
@@ -27,11 +31,12 @@ SettingsDialog::SettingsDialog(const Appearance& appearance, QWidget* parent)
     , selectionTextColorButton_(new QPushButton(this))
     , backgroundAlphaSlider_(new QSlider(Qt::Horizontal, this))
     , backgroundAlphaSpin_(new QSpinBox(this))
+    , bossKeyEdit_(new QKeySequenceEdit(this))
 {
     qRegisterMetaType<Appearance>();
     setPalette(QApplication::palette());
     setAutoFillBackground(true);
-    setWindowTitle(tr("Appearance"));
+    setWindowTitle(tr("Settings"));
     setModal(true);
     setMinimumWidth(440);
 
@@ -48,6 +53,8 @@ SettingsDialog::SettingsDialog(const Appearance& appearance, QWidget* parent)
     backgroundAlphaSlider_->setObjectName(QStringLiteral("backgroundAlpha"));
     backgroundAlphaSlider_->setRange(0, 255);
     backgroundAlphaSpin_->setRange(0, 255);
+    bossKeyEdit_->setObjectName(QStringLiteral("bossKey"));
+    bossKeyEdit_->setMaximumSequenceLength(1);
 
     auto* alphaRow = new QWidget(this);
     auto* alphaLayout = new QHBoxLayout(alphaRow);
@@ -63,11 +70,16 @@ SettingsDialog::SettingsDialog(const Appearance& appearance, QWidget* parent)
     form->addRow(tr("Background alpha:"), alphaRow);
     form->addRow(tr("Cursor color:"), cursorColorButton_);
     form->addRow(tr("Selected text color:"), selectionTextColorButton_);
+    form->addRow(tr("Boss key:"), bossKeyEdit_);
 
     auto* explanation = new QLabel(
         tr("Alpha 0 makes only the background transparent; text and the cursor remain opaque."),
         this);
     explanation->setWordWrap(true);
+    auto* bossKeyExplanation = new QLabel(
+        tr("The boss key works system-wide. Include Ctrl, Alt, Shift, or the Windows key."),
+        this);
+    bossKeyExplanation->setWordWrap(true);
 
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel
@@ -76,6 +88,7 @@ SettingsDialog::SettingsDialog(const Appearance& appearance, QWidget* parent)
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(form);
     layout->addWidget(explanation);
+    layout->addWidget(bossKeyExplanation);
     layout->addWidget(buttons);
 
     connect(fontCombo_, &QFontComboBox::currentFontChanged,
@@ -117,20 +130,41 @@ SettingsDialog::SettingsDialog(const Appearance& appearance, QWidget* parent)
         chooseColor(appearance_.selectionTextColor, selectionTextColorButton_,
                     tr("Selected Text Color"));
     });
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(bossKeyEdit_, &QKeySequenceEdit::keySequenceChanged,
+            this, [this](const QKeySequence& shortcut) {
+                if (!updating_) {
+                    bossKey_ = shortcut;
+                }
+            });
+    connect(buttons, &QDialogButtonBox::accepted, this, [this] {
+        if (!GlobalShortcut::isSupportedShortcut(bossKey_)) {
+            QMessageBox::warning(
+                this, tr("Boss key"),
+                tr("Use one shortcut containing at least one modifier key."));
+            return;
+        }
+        accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(buttons->button(QDialogButtonBox::RestoreDefaults),
             &QPushButton::clicked, this, [this] {
                 setAppearance(ThemeManager::defaultAppearance());
+                setBossKey(GlobalShortcut::defaultShortcut());
                 emitPreview();
             });
 
     setAppearance(appearance);
+    setBossKey(bossKey);
 }
 
 const Appearance& SettingsDialog::appearance() const noexcept
 {
     return appearance_;
+}
+
+const QKeySequence& SettingsDialog::bossKey() const noexcept
+{
+    return bossKey_;
 }
 
 void SettingsDialog::setAppearance(const Appearance& appearance)
@@ -142,6 +176,14 @@ void SettingsDialog::setAppearance(const Appearance& appearance)
     backgroundAlphaSlider_->setValue(appearance_.backgroundColor.alpha());
     backgroundAlphaSpin_->setValue(appearance_.backgroundColor.alpha());
     refreshColorButtons();
+    updating_ = false;
+}
+
+void SettingsDialog::setBossKey(const QKeySequence& bossKey)
+{
+    updating_ = true;
+    bossKey_ = bossKey;
+    bossKeyEdit_->setKeySequence(bossKey);
     updating_ = false;
 }
 
