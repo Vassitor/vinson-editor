@@ -12,6 +12,7 @@
 #include "search/SearchTypes.h"
 
 class QContextMenuEvent;
+class QWheelEvent;
 
 namespace vinson {
 
@@ -77,9 +78,11 @@ signals:
     void cursorPositionChanged(qsizetype line, qsizetype column);
     void documentModified(bool modified);
     void findRequested();
+    void fontSizeAdjustmentRequested(int steps);
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     static sptr_t scintillaColor(const QColor& color);
@@ -97,6 +100,7 @@ private:
     QColor cursorColor_;
     QColor selectionTextColor_;
     LargeFileMode largeFileMode_ = LargeFileMode::Normal;
+    int controlWheelDelta_ = 0;
 };
 
 } // namespace vinson

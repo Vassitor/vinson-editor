@@ -2,6 +2,7 @@
 #include "largefile/LargeFilePolicy.h"
 
 #include <QSignalSpy>
+#include <QWheelEvent>
 #include <QtTest>
 
 class EditorWidgetTest final : public QObject
@@ -16,6 +17,7 @@ private slots:
     void createsLargeDocumentBeforeLoading();
     void readsBoundedTextRanges();
     void searchesAcrossResponsiveSliceBoundary();
+    void requestsFontSizeAdjustmentFromControlWheel();
 };
 
 void EditorWidgetTest::defaultsToWrappedTextWithoutHorizontalScrolling()
@@ -111,6 +113,33 @@ void EditorWidgetTest::searchesAcrossResponsiveSliceBoundary()
         query, editor.documentLength(), 0, {});
     QCOMPARE(backward.start, forward.start);
     QCOMPARE(backward.end, forward.end);
+}
+
+void EditorWidgetTest::requestsFontSizeAdjustmentFromControlWheel()
+{
+    vinson::EditorWidget editor;
+    QSignalSpy adjustmentSpy(
+        &editor, &vinson::EditorWidget::fontSizeAdjustmentRequested);
+
+    QWheelEvent partialUp(
+        QPointF(10, 10), QPointF(10, 10), {}, QPoint(0, 60),
+        Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(editor.viewport(), &partialUp);
+    QCOMPARE(adjustmentSpy.count(), 0);
+
+    QWheelEvent secondPartialUp(
+        QPointF(10, 10), QPointF(10, 10), {}, QPoint(0, 60),
+        Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(editor.viewport(), &secondPartialUp);
+    QCOMPARE(adjustmentSpy.count(), 1);
+    QCOMPARE(adjustmentSpy.takeFirst().at(0).toInt(), 1);
+
+    QWheelEvent down(
+        QPointF(10, 10), QPointF(10, 10), {}, QPoint(0, -240),
+        Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(editor.viewport(), &down);
+    QCOMPARE(adjustmentSpy.count(), 1);
+    QCOMPARE(adjustmentSpy.takeFirst().at(0).toInt(), -2);
 }
 
 QTEST_MAIN(EditorWidgetTest)

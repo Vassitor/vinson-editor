@@ -37,7 +37,8 @@ if(UNIX AND NOT APPLE)
 endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core Core5Compat Gui Widgets LinguistTools)
+    Core Core5Compat Gui Widgets)
+find_package(Qt6 6.5 QUIET COMPONENTS LinguistTools)
 
 include(cmake/Scintilla.cmake)
 
@@ -98,12 +99,19 @@ if(WIN32)
     target_link_libraries(vinson_editor_ui PRIVATE dwmapi)
 endif()
 
-qt_add_translations(vinson_editor_ui
-    SOURCE_TARGETS vinson_core vinson_editor_ui
-    TS_FILES resources/i18n/vinson-editor_zh_CN.ts
-    RESOURCE_PREFIX "/i18n"
-    MERGE_QT_TRANSLATIONS
-    QT_TRANSLATION_CATALOGS qtbase)
+set(VINSON_TRANSLATIONS_ENABLED OFF)
+if(Qt6LinguistTools_FOUND)
+    qt_add_translations(vinson_editor_ui
+        SOURCE_TARGETS vinson_core vinson_editor_ui
+        TS_FILES resources/i18n/vinson-editor_zh_CN.ts
+        RESOURCE_PREFIX "/i18n"
+        MERGE_QT_TRANSLATIONS
+        QT_TRANSLATION_CATALOGS qtbase)
+    set(VINSON_TRANSLATIONS_ENABLED ON)
+else()
+    message(WARNING
+        "Qt LinguistTools was not found; bundled translations are disabled.")
+endif()
 
 add_executable(vinson-editor
     src/main.cpp
@@ -168,7 +176,16 @@ endif()
 install(TARGETS vinson-editor
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
     BUNDLE DESTINATION ".")
-install(FILES README.md CHANGELOG.md LICENSE DESTINATION ".")
+install(FILES
+    README.md
+    README.zh-CN.md
+    CHANGELOG.md
+    CHANGELOG.zh-CN.md
+    LICENSE
+    DESTINATION ".")
+install(DIRECTORY docs/
+    DESTINATION docs
+    FILES_MATCHING PATTERN "*.md")
 
 # Qt uses windeployqt on Windows and CMake's runtime dependency scanner on
 # Linux. This includes the required platform plugin while leaving the statically

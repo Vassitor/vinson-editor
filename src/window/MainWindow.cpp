@@ -116,6 +116,8 @@ MainWindow::MainWindow(QWidget* parent)
             });
     connect(editor_, &EditorWidget::findRequested,
             this, [this] { showFindReplace(false); });
+    connect(editor_, &EditorWidget::fontSizeAdjustmentRequested,
+            this, &MainWindow::adjustFontSize);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -385,7 +387,7 @@ void MainWindow::createMenus()
 
     for (QMenu* menu : {fileMenu, editMenu, searchMenu, viewMenu,
                         settingsMenu}) {
-        applySoftMenuShadow(menu);
+        applyNativeMenuShadow(menu);
     }
 }
 
@@ -756,6 +758,26 @@ void MainWindow::adjustBackgroundAlpha(int delta)
     themeManager_->applyAppearance(appearance);
     savePersistentSettings();
     statusBar()->showMessage(tr("Background alpha: %1").arg(alpha), 1500);
+}
+
+void MainWindow::adjustFontSize(int steps)
+{
+    if (steps == 0) {
+        return;
+    }
+
+    Appearance appearance = themeManager_->appearance();
+    const qreal currentSize = appearance.font.pointSizeF();
+    const qreal pointSize = std::clamp(
+        currentSize + static_cast<qreal>(steps), 6.0, 72.0);
+    if (qFuzzyCompare(pointSize, currentSize)) {
+        return;
+    }
+    appearance.font.setPointSizeF(pointSize);
+    themeManager_->applyAppearance(appearance);
+    savePersistentSettings();
+    statusBar()->showMessage(
+        tr("Font size: %1 pt").arg(pointSize, 0, 'f', 1), 1500);
 }
 
 void MainWindow::ensureWindowOnScreen()

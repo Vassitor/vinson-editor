@@ -1,5 +1,7 @@
 # Release packaging
 
+[简体中文](RELEASE.zh-CN.md) | English
+
 ## Windows portable package
 
 The supported release target is 64-bit Windows with MSVC 2022 or newer and a
@@ -19,6 +21,11 @@ beside the application. The resulting ZIP and `.sha256` file are written to
 Scintilla is compiled statically into `vinson-editor.exe`. Lexilla is pinned for
 future syntax support but is not linked by this plain-text release, so neither
 component needs a separate runtime DLL.
+
+Release archives include the English and Simplified Chinese README, changelog,
+and `docs/` documentation. Qt Linguist Tools must be installed in the release
+environment so the in-application Chinese translation and its localization
+test remain part of the release gate.
 
 ## Linux portability package
 
@@ -46,8 +53,8 @@ Qt SDK on `PATH`:
 1. Verify the SHA-256 file, then extract the ZIP to a new directory.
 2. Start `vinson-editor.exe` without installing anything.
 3. Create, save, reopen, reload, and drag/drop a Unicode-path text file.
-4. Exercise Find/Replace, appearance controls, Always On Top, Frameless, and
-   Minimal modes.
+4. Exercise Find/Replace and its wrap toggle, control-wheel font sizing,
+   appearance controls, Always On Top, Frameless, and Minimal modes.
 5. Close and reopen the application to confirm settings and geometry persist.
 6. Confirm `platforms/qwindows.dll` and the required Qt DLLs remain in the
    extracted package and that no Qt SDK directory is added to `PATH`.

@@ -2,6 +2,7 @@
 #include "search/SearchController.h"
 #include "ui/FindReplaceWidget.h"
 
+#include <QCheckBox>
 #include <QLineEdit>
 #include <QSignalSpy>
 #include <QtTest>
@@ -13,6 +14,7 @@ class SearchControllerTest final : public QObject
 private slots:
     void findsForwardAndWraps();
     void findsBackwardAndWraps();
+    void doesNotWrapWhenDisabled();
     void respectsCaseAndWholeWord();
     void replacesCurrentMatch();
     void replacesAllAsOneUndoAction();
@@ -48,6 +50,19 @@ void SearchControllerTest::findsBackwardAndWraps()
     QCOMPARE(controller.findPrevious(), vinson::SearchResult::Wrapped);
     QCOMPARE(editor.selectionStartPosition(), 8);
     QCOMPARE(controller.findPrevious(), vinson::SearchResult::Found);
+    QCOMPARE(editor.selectionStartPosition(), 0);
+}
+
+void SearchControllerTest::doesNotWrapWhenDisabled()
+{
+    vinson::EditorWidget editor;
+    editor.setTextUtf8("only match");
+    vinson::SearchController controller(&editor);
+    controller.setSearchText(QStringLiteral("only"));
+    controller.setOptions({false, false, false});
+
+    QCOMPARE(controller.findNext(), vinson::SearchResult::Found);
+    QCOMPARE(controller.findNext(), vinson::SearchResult::NotFound);
     QCOMPARE(editor.selectionStartPosition(), 0);
 }
 
@@ -130,6 +145,7 @@ void SearchControllerTest::findWidgetSwitchesModeAndSubmits()
 {
     vinson::FindReplaceWidget widget;
     QSignalSpy nextSpy(&widget, &vinson::FindReplaceWidget::findNextRequested);
+    QSignalSpy optionsSpy(&widget, &vinson::FindReplaceWidget::optionsChanged);
 
     widget.open(false, QStringLiteral("needle"));
     QVERIFY(!widget.isReplaceMode());
@@ -138,6 +154,16 @@ void SearchControllerTest::findWidgetSwitchesModeAndSubmits()
     QVERIFY(findEdit != nullptr);
     QTest::keyClick(findEdit, Qt::Key_Return);
     QCOMPARE(nextSpy.count(), 1);
+
+    auto* wrapAround = widget.findChild<QCheckBox*>(
+        QStringLiteral("wrapAround"));
+    QVERIFY(wrapAround != nullptr);
+    QVERIFY(widget.options().wrapAround);
+    wrapAround->setChecked(false);
+    QVERIFY(!widget.options().wrapAround);
+    QVERIFY(!optionsSpy.isEmpty());
+    QVERIFY(!qvariant_cast<vinson::SearchOptions>(
+                 optionsSpy.last().at(0)).wrapAround);
 
     widget.open(true);
     QVERIFY(widget.isReplaceMode());

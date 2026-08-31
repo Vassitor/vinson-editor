@@ -1,7 +1,6 @@
 #include "window/TrayController.h"
 
 #include <QAction>
-#include <QGraphicsDropShadowEffect>
 #include <QMainWindow>
 #include <QMenu>
 #include <QSignalSpy>
@@ -66,11 +65,11 @@ void TrayControllerTest::exposesContextMenuActions()
         QStringLiteral("systemTrayIcon"));
     QVERIFY(trayIcon != nullptr);
     QVERIFY(trayIcon->contextMenu() != nullptr);
-    auto* shadow = qobject_cast<QGraphicsDropShadowEffect*>(
-        trayIcon->contextMenu()->graphicsEffect());
-    QVERIFY(shadow != nullptr);
-    QVERIFY(shadow->blurRadius() > 0.0);
-    QVERIFY(shadow->color().alpha() > 0);
+    QVERIFY(!trayIcon->contextMenu()->windowFlags().testFlag(
+        Qt::NoDropShadowWindowHint));
+    QVERIFY(!trayIcon->contextMenu()->testAttribute(
+        Qt::WA_TranslucentBackground));
+    QVERIFY(trayIcon->contextMenu()->graphicsEffect() == nullptr);
     QVERIFY(trayIcon->contextMenu()->actions().contains(toggle));
     QVERIFY(trayIcon->contextMenu()->actions().contains(settings));
     QVERIFY(trayIcon->contextMenu()->actions().contains(bossKey));

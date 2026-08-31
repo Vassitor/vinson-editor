@@ -18,7 +18,7 @@ class WindowControllerTest final : public QObject
 private slots:
     void togglesWindowFlagsWithoutLosingSize();
     void framelessModeHidesChromeAndRestoresScrollBars();
-    void framelessEdgesExposeResizeCursor();
+    void framelessEdgesExposeMoveAndResizeCursors();
     void framelessModePreservesTextSelection();
     void minimalModeIsReversibleAndTracksFont();
     void minimalShortcutsDoNotChangeText();
@@ -100,7 +100,7 @@ void WindowControllerTest::framelessModeHidesChromeAndRestoresScrollBars()
     QVERIFY(editor->verticalScrollBar()->isVisible());
 }
 
-void WindowControllerTest::framelessEdgesExposeResizeCursor()
+void WindowControllerTest::framelessEdgesExposeMoveAndResizeCursors()
 {
     QMainWindow window;
     auto* editor = new vinson::EditorWidget(&window);
@@ -116,8 +116,16 @@ void WindowControllerTest::framelessEdgesExposeResizeCursor()
                      QPoint(1, editor->viewport()->height() / 2));
     QCOMPARE(editor->viewport()->cursor().shape(), Qt::SizeHorCursor);
 
+    QTest::mouseMove(editor->viewport(),
+                     QPoint(editor->viewport()->width() / 2, 1));
+    QCOMPARE(editor->viewport()->cursor().shape(), Qt::SizeAllCursor);
+
+    QTest::mouseMove(editor->viewport(), QPoint(1, 1));
+    QCOMPARE(editor->viewport()->cursor().shape(), Qt::SizeFDiagCursor);
+
     QTest::mouseMove(editor->viewport(), editor->viewport()->rect().center());
     QVERIFY(editor->viewport()->cursor().shape() != Qt::SizeHorCursor);
+    QVERIFY(editor->viewport()->cursor().shape() != Qt::SizeAllCursor);
 }
 
 void WindowControllerTest::framelessModePreservesTextSelection()

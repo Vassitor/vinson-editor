@@ -39,6 +39,7 @@
     <message><source>Increase Background Opacity</source><translation>提高背景不透明度</translation></message>
     <message><source>Decrease Background Opacity</source><translation>降低背景不透明度</translation></message>
     <message><source>Background alpha: %1</source><translation>背景透明度：%1</translation></message>
+    <message><source>Font size: %1 pt</source><translation>字号：%1 磅</translation></message>
     <message><source>Replace All in a very large file</source><translation>在超大文件中全部替换</translation></message>
     <message><source>Replace All may take a long time and create a large undo record. Continue?</source><translation>全部替换可能耗时较长并产生很大的撤销记录。是否继续？</translation></message>
     <message><source>Go To Line</source><translation>转到行</translation></message>
@@ -82,6 +83,7 @@
     <name>vinson::FindReplaceWidget</name>
     <message><source>Match case</source><translation>区分大小写</translation></message>
     <message><source>Whole word</source><translation>全字匹配</translation></message>
+    <message><source>Wrap around</source><translation>循环查找</translation></message>
     <message><source>Next</source><translation>下一个</translation></message>
     <message><source>Previous</source><translation>上一个</translation></message>
     <message><source>Close</source><translation>关闭</translation></message>

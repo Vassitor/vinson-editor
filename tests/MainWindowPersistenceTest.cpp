@@ -4,7 +4,6 @@
 #include "window/WindowController.h"
 
 #include <QAction>
-#include <QGraphicsDropShadowEffect>
 #include <QGuiApplication>
 #include <QMainWindow>
 #include <QMenu>
@@ -13,6 +12,7 @@
 #include <QSettings>
 #include <QStatusBar>
 #include <QTemporaryDir>
+#include <QWheelEvent>
 #include <QtTest>
 
 #include <algorithm>
@@ -28,7 +28,8 @@ private slots:
     void restoresPersistedApplicationState();
     void framelessShortcutRemainsAvailableWithHiddenMenuBar();
     void backgroundOpacityShortcutsArePersistent();
-    void titleBarMenusUseSoftShadows();
+    void controlWheelFontSizeIsPersistent();
+    void titleBarMenusUseNativeShadows();
     void closeToTrayPreservesUnsavedDocument();
     void explicitQuitIsSeparateFromCloseToTray();
     void savesChangedApplicationState();
@@ -215,7 +216,31 @@ void MainWindowPersistenceTest::backgroundOpacityShortcutsArePersistent()
     QCOMPARE(editor->textUtf8(), QByteArray("shortcut keeps document text"));
 }
 
-void MainWindowPersistenceTest::titleBarMenusUseSoftShadows()
+void MainWindowPersistenceTest::controlWheelFontSizeIsPersistent()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    auto* theme = window.findChild<vinson::ThemeManager*>();
+    QVERIFY(editor != nullptr);
+    QVERIFY(theme != nullptr);
+    const qreal originalSize = theme->appearance().font.pointSizeF();
+
+    QWheelEvent event(
+        QPointF(10, 10), QPointF(10, 10), {}, QPoint(0, 120),
+        Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(editor->viewport(), &event);
+
+    QCOMPARE(theme->appearance().font.pointSizeF(), originalSize + 1.0);
+    QSettings settings;
+    QCOMPARE(settings.value(QStringLiteral("appearance/fontSize")).toDouble(),
+             originalSize + 1.0);
+}
+
+void MainWindowPersistenceTest::titleBarMenusUseNativeShadows()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -229,11 +254,10 @@ void MainWindowPersistenceTest::titleBarMenusUseSoftShadows()
             continue;
         }
         ++menuCount;
-        auto* shadow = qobject_cast<QGraphicsDropShadowEffect*>(
-            menu->graphicsEffect());
-        QVERIFY(shadow != nullptr);
-        QVERIFY(shadow->blurRadius() >= 20.0);
-        QVERIFY(shadow->color().alpha() > 0);
+        QVERIFY(!menu->windowFlags().testFlag(
+            Qt::NoDropShadowWindowHint));
+        QVERIFY(!menu->testAttribute(Qt::WA_TranslucentBackground));
+        QVERIFY(menu->graphicsEffect() == nullptr);
     }
     QCOMPARE(menuCount, 5);
 }

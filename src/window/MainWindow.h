@@ -71,6 +71,7 @@ private:
     void restorePersistentSettings();
     void savePersistentSettings();
     void adjustBackgroundAlpha(int delta);
+    void adjustFontSize(int steps);
     void ensureWindowOnScreen();
     void handleLoadFailureState();
     [[nodiscard]] QString chooseSavePath();

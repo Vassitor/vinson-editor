@@ -3,64 +3,44 @@
 #include <algorithm>
 
 namespace vinson {
-namespace {
 
-class LineEndingCounter final
+void LineEndingDetector::consume(QByteArrayView data) noexcept
 {
-public:
-    void consume(QByteArrayView data) noexcept
-    {
-        for (const char value : data) {
-            if (pendingCarriageReturn_) {
-                if (value == '\n') {
-                    ++crlfCount_;
-                    pendingCarriageReturn_ = false;
-                    continue;
-                }
-                ++crCount_;
-                pendingCarriageReturn_ = false;
-            }
-
-            if (value == '\r') {
-                pendingCarriageReturn_ = true;
-            } else if (value == '\n') {
-                ++lfCount_;
-            }
-        }
-    }
-
-    [[nodiscard]] LineEnding result() noexcept
-    {
+    for (const char value : data) {
         if (pendingCarriageReturn_) {
+            if (value == '\n') {
+                ++crlfCount_;
+                pendingCarriageReturn_ = false;
+                continue;
+            }
             ++crCount_;
             pendingCarriageReturn_ = false;
         }
 
-        const int kinds = (lfCount_ > 0 ? 1 : 0) + (crlfCount_ > 0 ? 1 : 0)
-            + (crCount_ > 0 ? 1 : 0);
-        if (kinds == 0) {
-            return LineEnding::None;
+        if (value == '\r') {
+            pendingCarriageReturn_ = true;
+        } else if (value == '\n') {
+            ++lfCount_;
         }
-        if (kinds > 1) {
-            return LineEnding::Mixed;
-        }
-        if (crlfCount_ > 0) {
-            return LineEnding::CrLf;
-        }
-        if (crCount_ > 0) {
-            return LineEnding::Cr;
-        }
-        return LineEnding::Lf;
     }
+}
 
-private:
-    qint64 lfCount_ = 0;
-    qint64 crlfCount_ = 0;
-    qint64 crCount_ = 0;
-    bool pendingCarriageReturn_ = false;
-};
-
-} // namespace
+LineEnding LineEndingDetector::result() const noexcept
+{
+    const qint64 crCount = crCount_ + (pendingCarriageReturn_ ? 1 : 0);
+    const int kinds = (lfCount_ > 0 ? 1 : 0) + (crlfCount_ > 0 ? 1 : 0)
+        + (crCount > 0 ? 1 : 0);
+    if (kinds == 0) {
+        return LineEnding::None;
+    }
+    if (kinds > 1) {
+        return LineEnding::Mixed;
+    }
+    if (crlfCount_ > 0) {
+        return LineEnding::CrLf;
+    }
+    return crCount > 0 ? LineEnding::Cr : LineEnding::Lf;
+}
 
 EncodingDetection EncodingDetector::detect(QByteArrayView prefix)
 {
@@ -92,9 +72,9 @@ bool EncodingDetector::isAscii(QByteArrayView data) noexcept
 
 LineEnding EncodingDetector::detectLineEnding(QByteArrayView utf8Text) noexcept
 {
-    LineEndingCounter counter;
-    counter.consume(utf8Text);
-    return counter.result();
+    LineEndingDetector detector;
+    detector.consume(utf8Text);
+    return detector.result();
 }
 
 } // namespace vinson

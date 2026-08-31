@@ -11,6 +11,19 @@ struct EncodingDetection {
     qsizetype bomLength = 0;
 };
 
+class LineEndingDetector final
+{
+public:
+    void consume(QByteArrayView data) noexcept;
+    [[nodiscard]] LineEnding result() const noexcept;
+
+private:
+    qint64 lfCount_ = 0;
+    qint64 crlfCount_ = 0;
+    qint64 crCount_ = 0;
+    bool pendingCarriageReturn_ = false;
+};
+
 class EncodingDetector final
 {
 public:

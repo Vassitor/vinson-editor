@@ -5,63 +5,10 @@
 #include <QFile>
 #include <QStringConverter>
 
-#include <algorithm>
-
 namespace vinson {
 namespace {
 
 constexpr qsizetype chunkSize = 256 * 1024;
-
-class StreamingLineEndingCounter final
-{
-public:
-    void consume(QByteArrayView data) noexcept
-    {
-        for (const char value : data) {
-            if (pendingCarriageReturn_) {
-                if (value == '\n') {
-                    ++crlfCount_;
-                    pendingCarriageReturn_ = false;
-                    continue;
-                }
-                ++crCount_;
-                pendingCarriageReturn_ = false;
-            }
-
-            if (value == '\r') {
-                pendingCarriageReturn_ = true;
-            } else if (value == '\n') {
-                ++lfCount_;
-            }
-        }
-    }
-
-    [[nodiscard]] LineEnding result() noexcept
-    {
-        if (pendingCarriageReturn_) {
-            ++crCount_;
-            pendingCarriageReturn_ = false;
-        }
-        const int kinds = (lfCount_ > 0 ? 1 : 0) + (crlfCount_ > 0 ? 1 : 0)
-            + (crCount_ > 0 ? 1 : 0);
-        if (kinds == 0) {
-            return LineEnding::None;
-        }
-        if (kinds > 1) {
-            return LineEnding::Mixed;
-        }
-        if (crlfCount_ > 0) {
-            return LineEnding::CrLf;
-        }
-        return crCount_ > 0 ? LineEnding::Cr : LineEnding::Lf;
-    }
-
-private:
-    qint64 lfCount_ = 0;
-    qint64 crlfCount_ = 0;
-    qint64 crCount_ = 0;
-    bool pendingCarriageReturn_ = false;
-};
 
 class StreamingUtf8Validator final
 {
@@ -177,7 +124,7 @@ void FileLoader::load()
         || detection.encoding == TextEncoding::Utf16Be;
     QStringDecoder decoder(converterEncoding(detection.encoding));
     StreamingUtf8Validator utf8Validator;
-    StreamingLineEndingCounter lineEndings;
+    LineEndingDetector lineEndings;
     bool allAscii = true;
     qint64 bytesRead = firstChunk.size();
 

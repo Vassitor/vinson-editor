@@ -80,6 +80,7 @@ class FileCoreTest final : public QObject
 
 private slots:
     void detectsEncodingAndLineEndings();
+    void detectsLineEndingsAcrossChunkBoundaries();
     void loadsUtf8FromUnicodePath();
     void loadsEmptyFile();
     void reportsMissingFile();
@@ -115,6 +116,19 @@ void FileCoreTest::detectsEncodingAndLineEndings()
              vinson::LineEnding::Cr);
     QCOMPARE(vinson::EncodingDetector::detectLineEnding("a\r\nb\n"),
              vinson::LineEnding::Mixed);
+}
+
+void FileCoreTest::detectsLineEndingsAcrossChunkBoundaries()
+{
+    vinson::LineEndingDetector detector;
+    detector.consume("first\r");
+    QCOMPARE(detector.result(), vinson::LineEnding::Cr);
+
+    detector.consume("\nsecond\r\n");
+    QCOMPARE(detector.result(), vinson::LineEnding::CrLf);
+
+    detector.consume("third\n");
+    QCOMPARE(detector.result(), vinson::LineEnding::Mixed);
 }
 
 void FileCoreTest::classifiesLargeFileBoundaries()

@@ -19,6 +19,7 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     , replacementEdit_(new QLineEdit(this))
     , matchCaseCheck_(new QCheckBox(tr("Match case"), this))
     , wholeWordCheck_(new QCheckBox(tr("Whole word"), this))
+    , wrapAroundCheck_(new QCheckBox(tr("Wrap around"), this))
     , resultLabel_(new QLabel(this))
     , replacementRow_(new QWidget(this))
 {
@@ -26,6 +27,10 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
     findEdit_->setObjectName(QStringLiteral("findText"));
     replacementEdit_->setObjectName(QStringLiteral("replacementText"));
+    matchCaseCheck_->setObjectName(QStringLiteral("matchCase"));
+    wholeWordCheck_->setObjectName(QStringLiteral("wholeWord"));
+    wrapAroundCheck_->setObjectName(QStringLiteral("wrapAround"));
+    wrapAroundCheck_->setChecked(true);
     findEdit_->setClearButtonEnabled(true);
     replacementEdit_->setClearButtonEnabled(true);
 
@@ -54,6 +59,7 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     optionsRow->setContentsMargins(0, 0, 0, 0);
     optionsRow->addWidget(matchCaseCheck_);
     optionsRow->addWidget(wholeWordCheck_);
+    optionsRow->addWidget(wrapAroundCheck_);
     optionsRow->addWidget(resultLabel_, 1);
 
     auto* layout = new QVBoxLayout(this);
@@ -73,6 +79,8 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     connect(matchCaseCheck_, &QCheckBox::toggled,
             this, [this] { publishOptions(); });
     connect(wholeWordCheck_, &QCheckBox::toggled,
+            this, [this] { publishOptions(); });
+    connect(wrapAroundCheck_, &QCheckBox::toggled,
             this, [this] { publishOptions(); });
     connect(nextButton, &QPushButton::clicked,
             this, &FindReplaceWidget::findNextRequested);
@@ -125,7 +133,8 @@ QString FindReplaceWidget::replacementText() const
 
 SearchOptions FindReplaceWidget::options() const
 {
-    return {matchCaseCheck_->isChecked(), wholeWordCheck_->isChecked(), true};
+    return {matchCaseCheck_->isChecked(), wholeWordCheck_->isChecked(),
+            wrapAroundCheck_->isChecked()};
 }
 
 void FindReplaceWidget::setResult(SearchResult result, const QString& message)

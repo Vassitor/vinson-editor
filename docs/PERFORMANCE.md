@@ -1,5 +1,7 @@
 # Performance
 
+[简体中文](PERFORMANCE.zh-CN.md) | English
+
 ## Large-file design
 
 Application code does not access raw Scintilla messages outside `EditorWidget`,
@@ -22,6 +24,9 @@ Valid ASCII/UTF-8 data is incrementally validated and passed through without a
 UTF-16 `QString` round trip. UTF-16 input still uses stateful, per-chunk
 conversion. The GUI acknowledges each chunk only after appending it to
 Scintilla, and loading remains cancelable.
+
+Line-ending detection shares this streaming path and recognizes CRLF sequences
+split across chunks without an additional full-file scan.
 
 Large-mode search uses Scintilla target ranges in overlapping 8 MiB slices.
 The overlap preserves matches that cross a slice boundary. Between misses, the

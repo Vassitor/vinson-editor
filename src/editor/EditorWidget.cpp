@@ -9,6 +9,7 @@
 #include <QEventLoop>
 #include <QMenu>
 #include <QFontMetricsF>
+#include <QWheelEvent>
 
 #include <algorithm>
 #include <cmath>
@@ -469,6 +470,26 @@ void EditorWidget::contextMenuEvent(QContextMenuEvent* event)
     menu.addSeparator();
     menu.addAction(tr("Find…"), this, &EditorWidget::findRequested);
     menu.exec(event->globalPos());
+}
+
+void EditorWidget::wheelEvent(QWheelEvent* event)
+{
+    if (!event->modifiers().testFlag(Qt::ControlModifier)) {
+        controlWheelDelta_ = 0;
+        ScintillaEdit::wheelEvent(event);
+        return;
+    }
+
+    const int verticalDelta = event->angleDelta().y();
+    if (verticalDelta != 0) {
+        controlWheelDelta_ += verticalDelta;
+        const int steps = controlWheelDelta_ / 120;
+        controlWheelDelta_ %= 120;
+        if (steps != 0) {
+            emit fontSizeAdjustmentRequested(steps);
+        }
+    }
+    event->accept();
 }
 
 sptr_t EditorWidget::scintillaColor(const QColor& color)

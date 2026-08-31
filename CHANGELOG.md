@@ -1,7 +1,27 @@
 # Changelog
 
+[简体中文](CHANGELOG.zh-CN.md) | English
+
 All notable changes to Vinson Editor are documented in this file. Versions use
 the Semantic Versioning scheme.
+
+## [Unreleased]
+
+### Added
+
+- Persistent font-size adjustment with `Ctrl+Mouse Wheel`.
+- A user-selectable wrap-around option in the non-modal find/replace panel.
+- Simplified Chinese editions of the README, changelog, architecture,
+  development, performance, and release documentation.
+
+### Changed
+
+- Unified whole-buffer and streaming line-ending detection, including CRLF
+  sequences split across input chunks.
+- Made Qt Linguist Tools optional for core builds while retaining translated
+  resources and localization tests when the tools are installed.
+- Restored native window-manager menu shadows and made the top border a direct
+  frameless-window drag target.
 
 ## [0.1.0] - 2026-08-28
 

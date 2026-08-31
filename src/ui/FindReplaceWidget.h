@@ -46,6 +46,7 @@ private:
     QLineEdit* replacementEdit_ = nullptr;
     QCheckBox* matchCaseCheck_ = nullptr;
     QCheckBox* wholeWordCheck_ = nullptr;
+    QCheckBox* wrapAroundCheck_ = nullptr;
     QLabel* resultLabel_ = nullptr;
     QWidget* replacementRow_ = nullptr;
     bool replaceMode_ = false;

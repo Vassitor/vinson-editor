@@ -1,5 +1,7 @@
 # Architecture
 
+[简体中文](ARCHITECTURE.zh-CN.md) | English
+
 ## Current structure
 
 ```text
@@ -51,7 +53,8 @@ It preserves geometry, window state, focus, and combined flags when Qt recreates
 the native window. While frameless, its application event filter only consumes
 `Alt+Left` presses accepted by `QWindow::startSystemMove()` or presses in a
 six-pixel resize border accepted by `QWindow::startSystemResize()`. Ordinary
-editor mouse events pass through unchanged, preserving text selection. F11
+editor mouse events pass through unchanged, preserving text selection. The top
+border is also a direct move target, while corners and other edges resize. F11
 remains attached to the main window while its system frame is absent.
 
 Minimal mode is another reversible `WindowController` state. On entry the
@@ -71,6 +74,9 @@ chunk only after appending it to Scintilla. This prevents a fast disk from
 queuing a complete large file in memory. ASCII and UTF-8 take a validated
 byte-preserving path; only UTF-16 input creates bounded intermediate `QString`
 chunks.
+
+`LineEndingDetector` is shared by whole-buffer and streaming paths. It recognizes
+CRLF sequences split across chunk boundaries without requiring a second pass.
 
 `LargeFilePolicy` classifies source sizes as Normal below 64 MiB, Large at
 64 MiB, and Very Large at 512 MiB. `MainWindow` applies the policy before the

@@ -47,11 +47,13 @@ add_test(NAME settings_manager_tests COMMAND settings_manager_tests)
 set_tests_properties(settings_manager_tests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-add_executable(localization_tests LocalizationTest.cpp)
-target_link_libraries(localization_tests PRIVATE vinson_editor_ui Qt6::Test)
-add_test(NAME localization_tests COMMAND localization_tests)
-set_tests_properties(localization_tests PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+if(VINSON_TRANSLATIONS_ENABLED)
+    add_executable(localization_tests LocalizationTest.cpp)
+    target_link_libraries(localization_tests PRIVATE vinson_editor_ui Qt6::Test)
+    add_test(NAME localization_tests COMMAND localization_tests)
+    set_tests_properties(localization_tests PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endif()
 
 add_executable(main_window_persistence_tests MainWindowPersistenceTest.cpp)
 target_link_libraries(main_window_persistence_tests
@@ -69,8 +71,11 @@ set(vinson_test_targets
     tray_controller_tests
     global_shortcut_tests
     settings_manager_tests
-    localization_tests
     main_window_persistence_tests)
+
+if(TARGET localization_tests)
+    list(APPEND vinson_test_targets localization_tests)
+endif()
 
 if(WIN32)
     # Keep test executables runnable both through CTest and directly from an

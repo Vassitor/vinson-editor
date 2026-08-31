@@ -4,6 +4,6 @@ class QMenu;
 
 namespace vinson {
 
-void applySoftMenuShadow(QMenu* menu);
+void applyNativeMenuShadow(QMenu* menu);
 
 } // namespace vinson

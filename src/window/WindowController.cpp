@@ -24,6 +24,9 @@ constexpr int resizeBorderWidth = 6;
 
 Qt::CursorShape cursorForEdges(Qt::Edges edges)
 {
+    if (edges == Qt::TopEdge) {
+        return Qt::SizeAllCursor;
+    }
     if (edges == (Qt::LeftEdge | Qt::TopEdge)
         || edges == (Qt::RightEdge | Qt::BottomEdge)) {
         return Qt::SizeFDiagCursor;
@@ -329,6 +332,9 @@ bool WindowController::eventFilter(QObject* watched, QEvent* event)
             }
             const Qt::Edges edges = resizeEdgesAt(
                 mouseEvent->globalPosition().toPoint());
+            if (edges == Qt::TopEdge) {
+                return beginSystemMove();
+            }
             if (edges != Qt::Edges{}) {
                 return beginSystemResize(edges);
             }

@@ -1,5 +1,7 @@
 # Vinson Editor
 
+[简体中文](README.zh-CN.md) | English
+
 Vinson Editor is a lightweight, native plain-text editor built with C++20,
 Qt 6 Widgets, and Scintilla. Phase 10 release engineering is in place: the
 native editing surface is backed by asynchronous file loading, safe saving,
@@ -31,7 +33,7 @@ modes, and a specialized large-document path.
 - Replace current, replace all as one undo action, and go to line
 - Live font family/size and text, background, cursor, and selected-text colors
 - Background alpha from 0–255, including a fully transparent background with opaque text
-- Frameless mode with `Alt+Left Drag` system movement and edge system resizing
+- Frameless mode with top-border or `Alt+Left Drag` system movement and edge resizing
 - Always-on-top mode, composable with frameless mode
 - Minimal mode hides all chrome and allows a dynamically sized one-line window
 - Minimal-mode exit through `Ctrl+Shift+M` or `Esc` without changing document data
@@ -50,6 +52,7 @@ modes, and a specialized large-document path.
 - CMake 3.25+
 - Ninja
 - Qt 6.5+ with Widgets, Test, and Core5Compat
+- Qt Linguist Tools (optional; required to compile the bundled translations)
 
 Scintilla 5.6.6 and Lexilla 5.5.3 are vendored under `third_party/` from their
 official source releases. Lexilla is pinned now and will be linked when lexer
@@ -60,6 +63,12 @@ On Ubuntu 26.04, install the development dependencies with:
 ```bash
 sudo apt update
 sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev
+```
+
+To compile the bundled translations, also install:
+
+```bash
+sudo apt install qt6-tools-dev
 ```
 
 ## Build and run
@@ -121,9 +130,10 @@ dependency policy.
 | Find / Replace | `Ctrl+F` / `Ctrl+H` |
 | Find next / previous | `F3` / `Shift+F3` |
 | Go to line | `Ctrl+G` |
+| Adjust font size | `Ctrl+Mouse Wheel` |
 | Always on top | `Ctrl+Shift+T` |
 | Frameless mode | `F11` |
-| Move a frameless window | `Alt+Left Drag` |
+| Move a frameless window | Drag the top border or use `Alt+Left Drag` |
 | Minimal mode | `Ctrl+Shift+M` |
 | Exit minimal mode | `Esc` or `Ctrl+Shift+M` |
 
