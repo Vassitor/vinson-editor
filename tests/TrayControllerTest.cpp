@@ -14,6 +14,7 @@ class TrayControllerTest final : public QObject
 private slots:
     void togglesWindowVisibility();
     void restoresMinimizedWindow();
+    void focusesWindowWithoutToggling();
     void exposesContextMenuActions();
 };
 
@@ -46,6 +47,25 @@ void TrayControllerTest::restoresMinimizedWindow()
     QVERIFY(!window.isMinimized());
 }
 
+void TrayControllerTest::focusesWindowWithoutToggling()
+{
+    QMainWindow window;
+    vinson::TrayController controller(&window);
+    QSignalSpy focusSpy(&controller,
+                        &vinson::TrayController::editorFocusRequested);
+
+    window.hide();
+    controller.focusWindow();
+    QVERIFY(window.isVisible());
+    QVERIFY(!window.isMinimized());
+    QCOMPARE(focusSpy.count(), 1);
+
+    controller.focusWindow();
+    QVERIFY(window.isVisible());
+    QVERIFY(!window.isMinimized());
+    QCOMPARE(focusSpy.count(), 2);
+}
+
 void TrayControllerTest::exposesContextMenuActions()
 {
     QMainWindow window;
@@ -57,10 +77,13 @@ void TrayControllerTest::exposesContextMenuActions()
         QStringLiteral("traySettingsAction"));
     auto* bossKey = window.findChild<QAction*>(
         QStringLiteral("trayBossKeyAction"));
+    auto* focusShortcut = window.findChild<QAction*>(
+        QStringLiteral("trayFocusShortcutAction"));
     QVERIFY(toggle != nullptr);
     QVERIFY(quit != nullptr);
     QVERIFY(settings != nullptr);
     QVERIFY(bossKey != nullptr);
+    QVERIFY(focusShortcut != nullptr);
     auto* trayIcon = controller.findChild<QSystemTrayIcon*>(
         QStringLiteral("systemTrayIcon"));
     QVERIFY(trayIcon != nullptr);
@@ -73,8 +96,10 @@ void TrayControllerTest::exposesContextMenuActions()
     QVERIFY(trayIcon->contextMenu()->actions().contains(toggle));
     QVERIFY(trayIcon->contextMenu()->actions().contains(settings));
     QVERIFY(trayIcon->contextMenu()->actions().contains(bossKey));
+    QVERIFY(trayIcon->contextMenu()->actions().contains(focusShortcut));
     QVERIFY(trayIcon->contextMenu()->actions().contains(quit));
     QVERIFY(!bossKey->isEnabled());
+    QVERIFY(!focusShortcut->isEnabled());
 
     QSignalSpy quitSpy(&controller, &vinson::TrayController::quitRequested);
     QSignalSpy settingsSpy(&controller,

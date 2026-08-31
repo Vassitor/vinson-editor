@@ -28,7 +28,9 @@ main
 
 `SearchController` 将用户级搜索状态转换为 `EditorWidget` 暴露的窄接口。搜索直接使用 Scintilla 目标范围，包括向前/向后遍历和可选循环查找，因此控制器和查找替换控件都不需要复制完整文档。全部替换会合并为一个 Scintilla 撤销操作。`FindReplaceWidget` 保持非模态，并在关闭时将焦点归还编辑器。
 
-`ThemeManager` 持有当前内存中的外观状态，限制字号范围，保持文字和光标颜色不透明，并通过 `EditorWidget` 应用更改而不触碰文档。`SettingsDialog` 会立即预览每项设置；取消时恢复打开对话框之前的外观。
+`ThemeManager` 持有当前内存中的外观状态，限制字号范围，保持光标和选中文字颜色不透明，并通过 `EditorWidget` 分别应用背景与编辑区文字的 alpha，而不触碰文档。窗口控件使用文字颜色的不透明副本以保持清晰。`SettingsDialog` 会立即预览每项设置；取消时恢复打开对话框之前的外观。
+
+`TrayController` 持有两个相互独立的 `GlobalShortcut` 注册。老板键切换窗口显隐；聚焦快捷键始终显示、还原、置前并激活窗口，然后请求将键盘焦点交给 `EditorWidget`。
 
 `SettingsManager` 是唯一的 `QSettings` 边界。返回应用状态前，它会校验字体系列、字号、RGBA 颜色、布尔值、窗口几何数据大小和最近目录。`MainWindow` 先恢复窗口标志，再恢复几何，并确认窗口有足够区域与可用屏幕相交。无效或位于屏幕外的几何会回退到主显示器。设置中绝不保存文档文本或文件内容。
 
@@ -44,7 +46,7 @@ main
 
 `FileSaver` 对普通文档使用稳定的 UTF-8 快照。大文档则每次从 `EditorWidget` 请求一个 256 KiB 范围；编码转换和 `QSaveFile` I/O 保持在工作线程中，同时禁用编辑器，确保声明的范围不会在保存中途改变。取消或失败会丢弃临时文件，而不是截断源文件。ASCII 文档在需要时无损升级为 UTF-8。
 
-Scintilla 官方 5.6.6 源码会编译为私有静态目标 `Scintilla::Scintilla`。项目使用上游 `ScintillaEdit` 层，因为它在 `ScintillaEditBase` 之上提供生成的类型化 API。供应商源码树保持不变：CMake 在构建目录中复制 `Editor.cxx`，并加入一个受保护的 RGBA 样式背景适配器。这是必要的，因为公开的样式背景消息会先把所有颜色规范化为不透明 RGB，Qt 渲染器因而无法获得透明度。如果固定版本的源码不再匹配预期适配点，配置会直接失败。
+Scintilla 官方 5.6.6 源码会编译为私有静态目标 `Scintilla::Scintilla`。项目使用上游 `ScintillaEdit` 层，因为它在 `ScintillaEditBase` 之上提供生成的类型化 API。供应商源码树保持不变：CMake 在构建目录中复制 `Editor.cxx`，并加入受保护的 RGBA 样式前景和背景适配器。这是必要的，因为公开的样式颜色消息会先把颜色规范化为不透明 RGB，Qt 渲染器因而无法获得透明度。如果固定版本的源码不再匹配预期适配点，配置会直接失败。
 
 Qt 6 构建链接 Core5Compat，因为当前上游 Qt 适配层仍使用 `QTextCodec` 处理旧代码页。构建把上游 `EXPORT_IMPORT_API` 标注定义为空，因为静态库不应暴露 Windows DLL 导入/导出声明。
 

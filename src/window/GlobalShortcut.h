@@ -15,10 +15,12 @@ public:
     ~GlobalShortcut() override;
 
     [[nodiscard]] static QKeySequence defaultShortcut();
+    [[nodiscard]] static QKeySequence defaultFocusShortcut();
     [[nodiscard]] static bool isSupportedShortcut(
         const QKeySequence& shortcut) noexcept;
     [[nodiscard]] const QKeySequence& shortcut() const noexcept;
     [[nodiscard]] bool isRegistered() const noexcept;
+    [[nodiscard]] int nativeHotkeyId() const noexcept;
     bool setShortcut(const QKeySequence& shortcut, QString* error = nullptr);
 
     bool nativeEventFilter(const QByteArray& eventType, void* message,
@@ -31,6 +33,7 @@ private:
     void unregisterShortcut();
 
     QKeySequence shortcut_;
+    int nativeHotkeyId_ = 0;
     bool registered_ = false;
 };
 

@@ -47,7 +47,7 @@ Qt installation prefix before configuring.
 `third_party/scintilla` is the official Scintilla 5.6.6 source release and
 `third_party/lexilla` is the official Lexilla 5.5.3 source release. Keep their
 trees unmodified so upstream upgrades remain reviewable. Project-specific build
-logic belongs in `cmake/`. The RGBA background adaptation is generated under
+logic belongs in `cmake/`. The RGBA foreground/background adaptation is generated under
 `build/<preset>/generated/scintilla`; never apply it directly to the vendored
 source.
 
@@ -83,8 +83,7 @@ platform plugin and covers control-wheel font-size requests. `search_controller_
 the wrap-around toggle, case and whole-word matching, Unicode text, replacement and undo,
 go-to-line behavior, empty queries, and non-modal find-widget interaction.
 `appearance_tests` verifies live font/alpha previews, style application without
-document mutation, and rendered alpha-zero background pixels alongside opaque
-foreground pixels.
+document mutation, translucent editor-text pixels, and alpha-zero backgrounds.
 `window_controller_tests` verifies composable window flags, geometry retention,
 frameless resize cursors, and real Scintilla text selection with the window
 event filter active. It also verifies reversible minimal-mode UI state,
@@ -95,8 +94,9 @@ round trips, and fallback behavior for malformed fonts, sizes, colors, booleans,
 geometry, and directories.
 
 `tray_controller_tests` and `global_shortcut_tests` cover tray actions, window
-visibility, and boss-key validation. Native registration is exercised only on
-supported Windows environments. When Qt Linguist Tools is available,
+visibility, focus restoration, shortcut validation, and simultaneous native
+registration of the boss and focus shortcuts. Native registration is exercised
+only on supported Windows environments. When Qt Linguist Tools is available,
 `localization_tests` validates the Simplified Chinese resources and English
 fallback.
 

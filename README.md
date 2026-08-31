@@ -32,7 +32,9 @@ modes, and a specialized large-document path.
 - Non-modal find/replace with next, previous, wrap-around, case, and whole-word options
 - Replace current, replace all as one undo action, and go to line
 - Live font family/size and text, background, cursor, and selected-text colors
-- Background alpha from 0–255, including a fully transparent background with opaque text
+- Independent background and editor-font alpha controls from 0–255
+- Configurable system-wide boss key plus a focus shortcut that shows, restores,
+  and activates the window, then focuses the editor for immediate typing
 - Frameless mode with top-border or `Alt+Left Drag` system movement and edge resizing
 - Always-on-top mode, composable with frameless mode
 - Minimal mode hides all chrome and allows a dynamically sized one-line window

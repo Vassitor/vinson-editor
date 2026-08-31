@@ -8,6 +8,18 @@ endif()
 set(SCINTILLA_EDITOR_SOURCE
     "${CMAKE_CURRENT_BINARY_DIR}/generated/scintilla/Editor.cxx")
 file(READ "${SCINTILLA_ROOT}/src/Editor.cxx" SCINTILLA_EDITOR_CONTENT)
+set(SCINTILLA_STYLE_FORE_ORIGINAL
+    "vs.styles[wParam].fore = ColourRGBA::FromIpRGB(lParam);")
+set(SCINTILLA_STYLE_FORE_RGBA [=[
+#if defined(VINSON_SCINTILLA_RGBA_STYLE_FORE)
+		if ((static_cast<uintptr_t>(lParam) & (uintptr_t{1} << 32)) != 0) {
+			vs.styles[wParam].fore = ColourRGBA(static_cast<int>(lParam));
+		} else {
+			vs.styles[wParam].fore = ColourRGBA::FromIpRGB(lParam);
+		}
+#else
+		vs.styles[wParam].fore = ColourRGBA::FromIpRGB(lParam);
+#endif]=])
 set(SCINTILLA_STYLE_BACK_ORIGINAL
     "vs.styles[wParam].back = ColourRGBA::FromIpRGB(lParam);")
 set(SCINTILLA_STYLE_BACK_RGBA [=[
@@ -26,6 +38,14 @@ if(SCINTILLA_STYLE_BACK_POSITION EQUAL -1)
     message(FATAL_ERROR
         "The pinned Scintilla Editor.cxx no longer matches the RGBA adapter.")
 endif()
+string(FIND "${SCINTILLA_EDITOR_CONTENT}" "${SCINTILLA_STYLE_FORE_ORIGINAL}"
+    SCINTILLA_STYLE_FORE_POSITION)
+if(SCINTILLA_STYLE_FORE_POSITION EQUAL -1)
+    message(FATAL_ERROR
+        "The pinned Scintilla Editor.cxx no longer matches the foreground RGBA adapter.")
+endif()
+string(REPLACE "${SCINTILLA_STYLE_FORE_ORIGINAL}" "${SCINTILLA_STYLE_FORE_RGBA}"
+    SCINTILLA_EDITOR_CONTENT "${SCINTILLA_EDITOR_CONTENT}")
 string(REPLACE "${SCINTILLA_STYLE_BACK_ORIGINAL}" "${SCINTILLA_STYLE_BACK_RGBA}"
     SCINTILLA_EDITOR_CONTENT "${SCINTILLA_EDITOR_CONTENT}")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/scintilla")
@@ -93,7 +113,9 @@ target_include_directories(scintilla_qt
 # for both the library and every consumer.
 target_compile_definitions(scintilla_qt
     PUBLIC SCINTILLA_QT=1 EXPORT_IMPORT_API=
-    PRIVATE VINSON_SCINTILLA_RGBA_STYLE_BACK=1)
+    PRIVATE
+        VINSON_SCINTILLA_RGBA_STYLE_BACK=1
+        VINSON_SCINTILLA_RGBA_STYLE_FORE=1)
 set_target_properties(scintilla_qt PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON

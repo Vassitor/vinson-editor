@@ -46,14 +46,23 @@ int Application::run()
             &mainWindow, &MainWindow::requestApplicationQuit);
     connect(&trayController, &TrayController::settingsRequested,
             &mainWindow, &MainWindow::showSettings);
+    connect(&trayController, &TrayController::editorFocusRequested,
+            &mainWindow, &MainWindow::focusEditor);
     connect(&mainWindow, &MainWindow::bossKeyChanged,
             &trayController, &TrayController::setBossKey);
+    connect(&mainWindow, &MainWindow::focusShortcutChanged,
+            &trayController, &TrayController::setFocusShortcut);
     connect(&trayController, &TrayController::bossKeyRegistrationFailed,
             &mainWindow, &MainWindow::handleBossKeyRegistrationFailure);
+    connect(&trayController,
+            &TrayController::focusShortcutRegistrationFailed,
+            &mainWindow,
+            &MainWindow::handleFocusShortcutRegistrationFailure);
     connect(&mainWindow, &MainWindow::applicationQuitAccepted,
             this, &QCoreApplication::quit);
     if (!smokeTest) {
         (void)trayController.setBossKey(mainWindow.bossKey());
+        (void)trayController.setFocusShortcut(mainWindow.focusShortcut());
     }
     // The complete widget tree must exist before creating the native handle,
     // while redirection alpha must be enabled before the first framed show.

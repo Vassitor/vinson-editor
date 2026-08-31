@@ -35,7 +35,7 @@ ctest --preset debug
 
 ## 第三方源码策略
 
-`third_party/scintilla` 是 Scintilla 5.6.6 官方发布源码，`third_party/lexilla` 是 Lexilla 5.5.3 官方发布源码。请保持这些目录不含本地修改，使上游升级易于审查。项目专用构建逻辑应放在 `cmake/` 中。RGBA 背景适配会生成在 `build/<preset>/generated/scintilla` 下，绝不能直接修改供应商源码。
+`third_party/scintilla` 是 Scintilla 5.6.6 官方发布源码，`third_party/lexilla` 是 Lexilla 5.5.3 官方发布源码。请保持这些目录不含本地修改，使上游升级易于审查。项目专用构建逻辑应放在 `cmake/` 中。RGBA 前景/背景适配会生成在 `build/<preset>/generated/scintilla` 下，绝不能直接修改供应商源码。
 
 升级任一依赖时：
 
@@ -66,11 +66,11 @@ ctest --preset debug
 
 `search_controller_tests` 覆盖向前/向后遍历、循环查找开关、大小写和全字匹配、Unicode 文本、替换与撤销、转到行、空查询及非模态查找控件交互。
 
-`appearance_tests` 验证实时字体/透明度预览、在不修改文档的情况下应用样式，以及透明度为零的背景像素与不透明前景像素能够同时正确渲染。
+`appearance_tests` 验证实时字体/透明度预览、在不修改文档的情况下应用样式、半透明编辑区文字像素和透明度为零的背景。
 
 `window_controller_tests` 验证可组合窗口标志、几何保留、无边框移动/缩放光标，以及窗口事件过滤器启用时真实的 Scintilla 文本选择；还验证可逆的极简模式 UI 状态、从字体推导的单行尺寸、此前无边框状态恢复，以及在保留极简模式内编辑内容的同时安全进入和退出。
 
-`tray_controller_tests` 和 `global_shortcut_tests` 覆盖托盘菜单、窗口显隐和老板键校验；原生全局快捷键注册仅在受支持的 Windows 环境中验证。
+`tray_controller_tests` 和 `global_shortcut_tests` 覆盖托盘菜单、窗口显隐、聚焦恢复、快捷键校验，以及老板键和聚焦快捷键的同时原生注册；原生全局快捷键注册仅在受支持的 Windows 环境中验证。
 
 `settings_manager_tests` 覆盖设置文件缺失时的默认值、完整持久化往返，以及字体、字号、颜色、布尔值、窗口几何和目录数据损坏时的回退行为。安装 Qt Linguist Tools 后，`localization_tests` 还会验证简体中文资源和英文回退。
 

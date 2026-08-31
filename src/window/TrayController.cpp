@@ -18,6 +18,7 @@ TrayController::TrayController(QMainWindow* window, QObject* parent)
     , trayIcon_(new QSystemTrayIcon(this))
     , trayMenu_(new QMenu(window))
     , bossKeyShortcut_(new GlobalShortcut(this))
+    , focusShortcut_(new GlobalShortcut(this))
 {
     Q_ASSERT(window_ != nullptr);
     available_ = QSystemTrayIcon::isSystemTrayAvailable();
@@ -41,6 +42,10 @@ TrayController::TrayController(QMainWindow* window, QObject* parent)
     bossKeyAction_ = trayMenu_->addAction(QString());
     bossKeyAction_->setObjectName(QStringLiteral("trayBossKeyAction"));
     bossKeyAction_->setEnabled(false);
+    focusShortcutAction_ = trayMenu_->addAction(QString());
+    focusShortcutAction_->setObjectName(
+        QStringLiteral("trayFocusShortcutAction"));
+    focusShortcutAction_->setEnabled(false);
     trayMenu_->addSeparator();
     quitAction_ = trayMenu_->addAction(tr("E&xit"));
     quitAction_->setObjectName(QStringLiteral("trayQuitAction"));
@@ -58,6 +63,8 @@ TrayController::TrayController(QMainWindow* window, QObject* parent)
             });
     connect(bossKeyShortcut_, &GlobalShortcut::activated,
             this, &TrayController::toggleWindowVisibility);
+    connect(focusShortcut_, &GlobalShortcut::activated,
+            this, &TrayController::focusWindow);
     updateToggleAction();
 }
 
@@ -69,6 +76,11 @@ bool TrayController::isAvailable() const noexcept
 QKeySequence TrayController::bossKey() const
 {
     return bossKeyShortcut_->shortcut();
+}
+
+QKeySequence TrayController::focusShortcut() const
+{
+    return focusShortcut_->shortcut();
 }
 
 void TrayController::show()
@@ -99,6 +111,12 @@ void TrayController::showWindow()
     updateToggleAction();
 }
 
+void TrayController::focusWindow()
+{
+    showWindow();
+    emit editorFocusRequested();
+}
+
 void TrayController::hideWindow()
 {
     window_->hide();
@@ -121,6 +139,23 @@ bool TrayController::setBossKey(const QKeySequence& shortcut)
     return false;
 }
 
+bool TrayController::setFocusShortcut(const QKeySequence& shortcut)
+{
+    const QKeySequence previous = focusShortcut_->shortcut();
+    QString error;
+    if (focusShortcut_->setShortcut(shortcut, &error)) {
+        updateToggleAction();
+        return true;
+    }
+
+    QString restoreError;
+    (void)focusShortcut_->setShortcut(previous, &restoreError);
+    updateToggleAction();
+    emit focusShortcutRegistrationFailed(
+        focusShortcut_->shortcut(), error);
+    return false;
+}
+
 void TrayController::updateToggleAction()
 {
     const bool shown = window_->isVisible() && !window_->isMinimized();
@@ -129,6 +164,11 @@ void TrayController::updateToggleAction()
     bossKeyAction_->setText(shortcut.isEmpty()
         ? tr("Boss key: Disabled")
         : tr("Boss key: %1").arg(shortcut.toString(QKeySequence::NativeText)));
+    const QKeySequence focus = focusShortcut_->shortcut();
+    focusShortcutAction_->setText(focus.isEmpty()
+        ? tr("Focus shortcut: Disabled")
+        : tr("Focus shortcut: %1")
+              .arg(focus.toString(QKeySequence::NativeText)));
 }
 
 } // namespace vinson

@@ -25,6 +25,7 @@ private slots:
     void appliesAppearanceWithoutChangingDocument();
     void appliesReadableWindowChromePalette();
     void transparentBackgroundKeepsTextVisible();
+    void transparentFontRendersPartialAlpha();
     void nativeFramedBackgroundAlphaIsAvailable();
     void dialogPreviewsBackgroundAlpha();
 };
@@ -54,7 +55,7 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     QVERIFY(!editor->modify());
     QVERIFY(modifiedSpy.isEmpty());
     QCOMPARE(editor->editorFont().pointSizeF(), 18.5);
-    QCOMPARE(editor->textColor(), QColor(10, 20, 30, 255));
+    QCOMPARE(editor->textColor(), QColor(10, 20, 30, 10));
     QCOMPARE(manager.appearance().backgroundColor, QColor(40, 50, 60, 127));
     QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
     QCOMPARE(editor->cursorColor(), QColor(70, 80, 90, 255));
@@ -99,7 +100,7 @@ void AppearanceTest::appliesReadableWindowChromePalette()
     QCOMPARE(window.palette().color(QPalette::Window),
              appearance.backgroundColor);
     QCOMPARE(window.palette().color(QPalette::WindowText),
-             appearance.textColor);
+             QColor(20, 30, 40, 255));
     QCOMPARE(window.menuBar()->palette().color(QPalette::ButtonText),
              appearance.textColor);
     QCOMPARE(window.statusBar()->palette().color(QPalette::WindowText),
@@ -178,23 +179,70 @@ void AppearanceTest::nativeFramedBackgroundAlphaIsAvailable()
 #endif
 }
 
+void AppearanceTest::transparentFontRendersPartialAlpha()
+{
+    QWidget window;
+    window.setAttribute(Qt::WA_TranslucentBackground);
+    auto* editor = new vinson::EditorWidget(&window);
+    auto* layout = new QVBoxLayout(&window);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(editor);
+    vinson::ThemeManager manager(editor, &window);
+
+    editor->setLineNumbersVisible(false);
+    editor->setTextUtf8("Opacity");
+    vinson::Appearance appearance = manager.appearance();
+    appearance.textColor = QColor(255, 255, 255, 96);
+    appearance.backgroundColor = QColor(0, 0, 0, 0);
+    manager.setFramelessMode(true);
+    manager.applyAppearance(appearance);
+
+    window.resize(260, 90);
+    window.show();
+    QCoreApplication::processEvents();
+    QImage image(editor->viewport()->size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    editor->viewport()->render(&painter);
+    painter.end();
+
+    int partialAlphaPixels = 0;
+    for (int y = 0; y < image.height(); ++y) {
+        const auto* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            const int alpha = qAlpha(line[x]);
+            partialAlphaPixels += alpha > 0 && alpha < 255 ? 1 : 0;
+        }
+    }
+    QVERIFY(partialAlphaPixels > 20);
+    QCOMPARE(editor->textColor(), QColor(255, 255, 255, 96));
+}
+
 void AppearanceTest::dialogPreviewsBackgroundAlpha()
 {
     vinson::Appearance appearance = vinson::ThemeManager::defaultAppearance();
     const QKeySequence bossKey(QStringLiteral("Ctrl+Alt+Space"));
-    vinson::SettingsDialog dialog(appearance, bossKey);
+    const QKeySequence focusShortcut(QStringLiteral("Ctrl+Alt+F"));
+    vinson::SettingsDialog dialog(appearance, bossKey, focusShortcut);
     QSignalSpy previewSpy(&dialog, &vinson::SettingsDialog::previewChanged);
     auto* fontSize = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("fontSize"));
     auto* alpha = dialog.findChild<QSlider*>(QStringLiteral("backgroundAlpha"));
+    auto* textAlpha = dialog.findChild<QSlider*>(QStringLiteral("textAlpha"));
     QVERIFY(fontSize != nullptr);
     QVERIFY(alpha != nullptr);
+    QVERIFY(textAlpha != nullptr);
     auto* bossKeyEdit = dialog.findChild<QKeySequenceEdit*>(
         QStringLiteral("bossKey"));
     QVERIFY(bossKeyEdit != nullptr);
     QCOMPARE(dialog.bossKey(), bossKey);
+    QCOMPARE(dialog.focusShortcut(), focusShortcut);
 
     fontSize->setValue(20.0);
     QCOMPARE(dialog.appearance().font.pointSizeF(), 20.0);
+    QCOMPARE(previewSpy.count(), 1);
+    previewSpy.clear();
+    textAlpha->setValue(80);
+    QCOMPARE(dialog.appearance().textColor.alpha(), 80);
     QCOMPARE(previewSpy.count(), 1);
     previewSpy.clear();
     alpha->setValue(0);
@@ -206,6 +254,14 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
         QKeySequence(QStringLiteral("Ctrl+Shift+F12")));
     QCOMPARE(dialog.bossKey(),
              QKeySequence(QStringLiteral("Ctrl+Shift+F12")));
+
+    auto* focusShortcutEdit = dialog.findChild<QKeySequenceEdit*>(
+        QStringLiteral("focusShortcut"));
+    QVERIFY(focusShortcutEdit != nullptr);
+    focusShortcutEdit->setKeySequence(
+        QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
+    QCOMPARE(dialog.focusShortcut(),
+             QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
 }
 
 QTEST_MAIN(AppearanceTest)

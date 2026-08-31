@@ -4,13 +4,15 @@
 
 ## Windows 便携包
 
-受支持的发布目标是 64 位 Windows、MSVC 2022 或更新版本，以及与之匹配的 64 位 Qt 6.5+。在能够通过 `CMAKE_PREFIX_PATH` 找到 Qt 的 Developer PowerShell 中运行：
+受支持的发布目标是 64 位 Windows、Visual Studio 2022 或更新版本，以及其中的 **使用 C++ 的桌面开发** 工作负载。在仓库根目录的任意 PowerShell 中运行：
 
 ```powershell
 .\scripts\package-windows.ps1
 ```
 
-脚本会配置并构建 Release、运行全部测试并调用 CPack。在 CPack 安装阶段，Qt CMake 部署 API 会运行 `windeployqt`，把所需 Qt DLL、编译器运行库、`qt.conf` 和平台插件放到应用旁边。生成的 ZIP 和 `.sha256` 文件位于 `build/release/`。
+脚本会自动初始化 Visual Studio x64 编译环境，查找 CMake、Ninja 和兼容的 Qt，配置并构建 Release、运行全部测试、调用 CPack，并验证生成的 SHA-256 校验和。如果缺少 CMake、Ninja 或 Qt，脚本会借助 Python 3.9+ 将仓库专用副本安装到 `.build-tools/`，不会修改系统级安装。可通过 `-QtRoot` 指定 Qt 目录；在离线且工具已准备好的环境中可使用 `-NoBootstrap`。
+
+在 CPack 安装阶段，Qt CMake 部署 API 会运行 `windeployqt`，把所需 Qt DLL、编译器运行库、`qt.conf` 和平台插件放到应用旁边。生成的 ZIP 和 `.sha256` 文件位于 `build/release/packages/` 下独立的时间戳目录中，因此即使旧 ZIP 正被资源管理器或其他程序打开，也不会阻塞新包生成。脚本完成时会输出最终产物路径和哈希值。
 
 Scintilla 会静态编译进 `vinson-editor.exe`。Lexilla 已为未来语法支持固定版本，但当前纯文本版本不会链接它，因此两者都不需要单独的运行时 DLL。
 

@@ -21,12 +21,15 @@ class SettingsDialog final : public QDialog
 public:
     explicit SettingsDialog(const Appearance& appearance,
                             const QKeySequence& bossKey,
+                            const QKeySequence& focusShortcut,
                             QWidget* parent = nullptr);
 
     [[nodiscard]] const Appearance& appearance() const noexcept;
     [[nodiscard]] const QKeySequence& bossKey() const noexcept;
+    [[nodiscard]] const QKeySequence& focusShortcut() const noexcept;
     void setAppearance(const Appearance& appearance);
     void setBossKey(const QKeySequence& bossKey);
+    void setFocusShortcut(const QKeySequence& focusShortcut);
 
 signals:
     void previewChanged(const vinson::Appearance& appearance);
@@ -39,6 +42,7 @@ private:
 
     Appearance appearance_;
     QKeySequence bossKey_;
+    QKeySequence focusShortcut_;
     QFontComboBox* fontCombo_ = nullptr;
     QDoubleSpinBox* fontSizeSpin_ = nullptr;
     QPushButton* textColorButton_ = nullptr;
@@ -47,7 +51,10 @@ private:
     QPushButton* selectionTextColorButton_ = nullptr;
     QSlider* backgroundAlphaSlider_ = nullptr;
     QSpinBox* backgroundAlphaSpin_ = nullptr;
+    QSlider* textAlphaSlider_ = nullptr;
+    QSpinBox* textAlphaSpin_ = nullptr;
     QKeySequenceEdit* bossKeyEdit_ = nullptr;
+    QKeySequenceEdit* focusShortcutEdit_ = nullptr;
     bool updating_ = false;
 };
 

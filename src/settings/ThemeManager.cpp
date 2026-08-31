@@ -30,6 +30,12 @@ QColor blendedColor(const QColor& background, const QColor& foreground,
          + foreground.blue() * foregroundPercent) / 100);
 }
 
+QColor opaqueColor(QColor color)
+{
+    color.setAlpha(255);
+    return color;
+}
+
 } // namespace
 
 ThemeManager::ThemeManager(EditorWidget* editor, QWidget* window, QObject* parent)
@@ -163,6 +169,7 @@ QScrollBar::sub-page { background: transparent; }
 void ThemeManager::applyWindowAppearance()
 {
     const QColor background = paintedBackgroundColor();
+    const QColor chromeText = opaqueColor(appearance_.textColor);
     QPalette palette = window_->palette();
     for (const QPalette::ColorGroup group : {
              QPalette::Active, QPalette::Inactive, QPalette::Disabled}) {
@@ -173,11 +180,11 @@ void ThemeManager::applyWindowAppearance()
         palette.setColor(group, QPalette::Button,
                          background);
         palette.setColor(group, QPalette::WindowText,
-                         appearance_.textColor);
+                         chromeText);
         palette.setColor(group, QPalette::Text,
-                         appearance_.textColor);
+                         chromeText);
         palette.setColor(group, QPalette::ButtonText,
-                         appearance_.textColor);
+                         chromeText);
     }
     window_->setPalette(palette);
     window_->setAutoFillBackground(!framelessMode_);
@@ -206,7 +213,7 @@ void ThemeManager::applyNativeWindowAppearance()
     }
     (void)setNativeBackgroundAlphaEnabled(window_, true);
     applyNativeTitleBarColors(window_, appearance_.backgroundColor,
-                              appearance_.textColor);
+                              opaqueColor(appearance_.textColor));
 }
 
 Appearance ThemeManager::normalized(Appearance appearance)
@@ -230,7 +237,6 @@ Appearance ThemeManager::normalized(Appearance appearance)
     if (!appearance.selectionTextColor.isValid()) {
         appearance.selectionTextColor = defaults.selectionTextColor;
     }
-    appearance.textColor.setAlpha(255);
     appearance.cursorColor.setAlpha(255);
     appearance.selectionTextColor.setAlpha(255);
     return appearance;

@@ -34,16 +34,21 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
     void setCloseToTrayEnabled(bool enabled) noexcept;
     [[nodiscard]] const QKeySequence& bossKey() const noexcept;
+    [[nodiscard]] const QKeySequence& focusShortcut() const noexcept;
 
 public slots:
     void requestApplicationQuit();
     void showSettings();
+    void focusEditor();
     void handleBossKeyRegistrationFailure(
+        const QKeySequence& activeShortcut, const QString& message);
+    void handleFocusShortcutRegistrationFailure(
         const QKeySequence& activeShortcut, const QString& message);
 
 signals:
     void applicationQuitAccepted();
     void bossKeyChanged(const QKeySequence& shortcut);
+    void focusShortcutChanged(const QKeySequence& shortcut);
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -114,6 +119,7 @@ private:
     qint64 currentLine_ = 1;
     QString lastDirectory_;
     QKeySequence bossKey_;
+    QKeySequence focusShortcut_;
 };
 
 } // namespace vinson

@@ -4,19 +4,29 @@
 
 ## Windows portable package
 
-The supported release target is 64-bit Windows with MSVC 2022 or newer and a
-matching 64-bit Qt 6.5+ installation. From a Developer PowerShell whose
-`CMAKE_PREFIX_PATH` can locate Qt, run:
+The supported release target is 64-bit Windows with Visual Studio 2022 or newer
+and its **Desktop development with C++** workload. From any PowerShell in the
+repository root, run:
 
 ```powershell
 .\scripts\package-windows.ps1
 ```
 
-The script configures and builds Release, runs all tests, and invokes CPack.
+The script initializes the Visual Studio x64 environment, locates CMake, Ninja,
+and a compatible Qt installation, configures and builds Release, runs all
+tests, invokes CPack, and verifies the generated SHA-256 checksum. If CMake,
+Ninja, or Qt is missing, Python 3.9+ is used to install a repository-local copy
+under `.build-tools/`; no system-wide installation is changed. Pass `-QtRoot`
+to use a specific Qt directory, or `-NoBootstrap` for an offline,
+already-provisioned environment.
+
 During CPack installation, Qt's CMake deployment API runs `windeployqt` and
 places the required Qt DLLs, compiler runtime, `qt.conf`, and platform plugins
 beside the application. The resulting ZIP and `.sha256` file are written to
-`build/release/`.
+an independent timestamped directory under `build/release/packages/`. Separate
+output directories allow a new package to be built even while an earlier ZIP
+is open in Explorer or another application. The final artifact paths and hash
+are printed when the script completes.
 
 Scintilla is compiled statically into `vinson-editor.exe`. Lexilla is pinned for
 future syntax support but is not linked by this plain-text release, so neither

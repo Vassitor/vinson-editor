@@ -51,7 +51,7 @@ void SettingsManagerTest::roundTripsValidatedSettings()
     const QString path = directory.filePath(QStringLiteral("settings.ini"));
     vinson::ApplicationSettings expected = vinson::SettingsManager::defaults();
     expected.appearance.font.setPointSizeF(18.5);
-    expected.appearance.textColor = QColor(1, 2, 3, 255);
+    expected.appearance.textColor = QColor(1, 2, 3, 63);
     expected.appearance.backgroundColor = QColor(4, 5, 6, 17);
     expected.appearance.cursorColor = QColor(7, 8, 9, 255);
     expected.appearance.selectionTextColor = QColor(10, 11, 12, 255);
@@ -62,6 +62,7 @@ void SettingsManagerTest::roundTripsValidatedSettings()
     expected.alwaysOnTop = true;
     expected.frameless = true;
     expected.bossKey = QKeySequence(QStringLiteral("Ctrl+Shift+F12"));
+    expected.focusShortcut = QKeySequence(QStringLiteral("Ctrl+Alt+F11"));
 
     {
         vinson::SettingsManager manager(path);
@@ -102,6 +103,8 @@ void SettingsManagerTest::rejectsInvalidPersistedValues()
         raw.setValue(QStringLiteral("window/frameless"),
                      QStringLiteral("invalid"));
         raw.setValue(QStringLiteral("input/bossKey"),
+                     QStringLiteral("A"));
+        raw.setValue(QStringLiteral("input/focusShortcut"),
                      QStringLiteral("A"));
         raw.setValue(QStringLiteral("files/lastDirectory"),
                      directory.filePath(QStringLiteral("missing")));

@@ -72,6 +72,8 @@
     <message><source>&amp;Settings…</source><translation>设置(&amp;S)…</translation></message>
     <message><source>Boss key: Disabled</source><translation>老板键：已禁用</translation></message>
     <message><source>Boss key: %1</source><translation>老板键：%1</translation></message>
+    <message><source>Focus shortcut: Disabled</source><translation>聚焦快捷键：已禁用</translation></message>
+    <message><source>Focus shortcut: %1</source><translation>聚焦快捷键：%1</translation></message>
 </context>
 <context>
     <name>vinson::GlobalShortcut</name>
@@ -100,15 +102,21 @@
     <message><source>Font:</source><translation>字体：</translation></message>
     <message><source>Font size:</source><translation>字号：</translation></message>
     <message><source>Text color:</source><translation>文字颜色：</translation></message>
+    <message><source>Font opacity:</source><translation>字体不透明度：</translation></message>
     <message><source>Background color:</source><translation>背景颜色：</translation></message>
     <message><source>Background alpha:</source><translation>背景透明度：</translation></message>
     <message><source>Cursor color:</source><translation>光标颜色：</translation></message>
     <message><source>Selected text color:</source><translation>选中文字颜色：</translation></message>
     <message><source>Boss key:</source><translation>老板键：</translation></message>
+    <message><source>Focus shortcut:</source><translation>聚焦快捷键：</translation></message>
     <message><source>The boss key works system-wide. Include Ctrl, Alt, Shift, or the Windows key.</source><translation>老板键在系统范围内生效，请包含 Ctrl、Alt、Shift 或 Windows 键。</translation></message>
     <message><source>Boss key</source><translation>老板键</translation></message>
     <message><source>Use one shortcut containing at least one modifier key.</source><translation>请使用一组至少包含一个修饰键的快捷键。</translation></message>
-    <message><source>Alpha 0 makes only the background transparent; text and the cursor remain opaque.</source><translation>透明度为 0 时仅背景透明，文字和光标仍保持不透明。</translation></message>
+    <message><source>Background alpha changes only the background. Font opacity changes editor text while window controls remain opaque.</source><translation>背景透明度只影响背景；字体不透明度只影响编辑区文字，窗口控件仍保持不透明。</translation></message>
+    <message><source>The focus shortcut shows, restores, and activates the window, then focuses the editor for immediate typing.</source><translation>聚焦快捷键会显示、还原并激活窗口，然后聚焦编辑区以便立即输入。</translation></message>
+    <message><source>Focus shortcut</source><translation>聚焦快捷键</translation></message>
+    <message><source>Global shortcuts</source><translation>全局快捷键</translation></message>
+    <message><source>The boss key and focus shortcut must be different.</source><translation>老板键与聚焦快捷键不能相同。</translation></message>
     <message><source>Text Color</source><translation>文字颜色</translation></message>
     <message><source>Background Color</source><translation>背景颜色</translation></message>
     <message><source>Cursor Color</source><translation>光标颜色</translation></message>

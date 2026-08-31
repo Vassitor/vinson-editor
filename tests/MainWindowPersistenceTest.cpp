@@ -1,5 +1,6 @@
 #include "editor/EditorWidget.h"
 #include "settings/ThemeManager.h"
+#include "window/GlobalShortcut.h"
 #include "window/MainWindow.h"
 #include "window/WindowController.h"
 
@@ -29,6 +30,7 @@ private slots:
     void framelessShortcutRemainsAvailableWithHiddenMenuBar();
     void backgroundOpacityShortcutsArePersistent();
     void controlWheelFontSizeIsPersistent();
+    void focusRequestTargetsEditor();
     void titleBarMenusUseNativeShadows();
     void closeToTrayPreservesUnsavedDocument();
     void explicitQuitIsSeparateFromCloseToTray();
@@ -98,7 +100,7 @@ void MainWindowPersistenceTest::restoresPersistedApplicationState()
                           defaults.font.family());
         settings.setValue(QStringLiteral("appearance/fontSize"), 19.5);
         settings.setValue(QStringLiteral("appearance/textColor"),
-                          QStringLiteral("#ff010203"));
+                          QStringLiteral("#3f010203"));
         settings.setValue(QStringLiteral("appearance/backgroundColor"),
                           QStringLiteral("#11040506"));
         settings.setValue(QStringLiteral("appearance/cursorColor"),
@@ -111,6 +113,8 @@ void MainWindowPersistenceTest::restoresPersistedApplicationState()
         settings.setValue(QStringLiteral("window/frameless"), true);
         settings.setValue(QStringLiteral("input/bossKey"),
                           QStringLiteral("Ctrl+Shift+F12"));
+        settings.setValue(QStringLiteral("input/focusShortcut"),
+                          QStringLiteral("Ctrl+Alt+F11"));
         settings.setValue(QStringLiteral("files/lastDirectory"), directory.path());
         settings.sync();
     }
@@ -128,7 +132,7 @@ void MainWindowPersistenceTest::restoresPersistedApplicationState()
     QVERIFY(lines != nullptr);
 
     QCOMPARE(theme->appearance().font.pointSizeF(), 19.5);
-    QCOMPARE(theme->appearance().textColor, QColor(1, 2, 3, 255));
+    QCOMPARE(theme->appearance().textColor, QColor(1, 2, 3, 63));
     QCOMPARE(theme->appearance().backgroundColor, QColor(4, 5, 6, 17));
     QVERIFY(editor->isWordWrapEnabled());
     QVERIFY(!editor->areLineNumbersVisible());
@@ -138,6 +142,8 @@ void MainWindowPersistenceTest::restoresPersistedApplicationState()
     QVERIFY(controller->isFrameless());
     QCOMPARE(window.bossKey(),
              QKeySequence(QStringLiteral("Ctrl+Shift+F12")));
+    QCOMPARE(window.focusShortcut(),
+             QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
     QVERIFY(window.menuBar()->isHidden());
     QVERIFY(window.statusBar()->isHidden());
     controller->setFrameless(false);
@@ -240,6 +246,24 @@ void MainWindowPersistenceTest::controlWheelFontSizeIsPersistent()
              originalSize + 1.0);
 }
 
+void MainWindowPersistenceTest::focusRequestTargetsEditor()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    QVERIFY(editor != nullptr);
+    window.show();
+    QCoreApplication::processEvents();
+    editor->clearFocus();
+
+    window.focusEditor();
+
+    QTRY_VERIFY(editor->hasFocus());
+}
+
 void MainWindowPersistenceTest::titleBarMenusUseNativeShadows()
 {
     QTemporaryDir directory;
@@ -336,6 +360,9 @@ void MainWindowPersistenceTest::savesChangedApplicationState()
     QCOMPARE(settings.value(QStringLiteral("view/lineNumbers")).toBool(), false);
     QCOMPARE(settings.value(QStringLiteral("window/alwaysOnTop")).toBool(), true);
     QCOMPARE(settings.value(QStringLiteral("window/frameless")).toBool(), true);
+    QCOMPARE(settings.value(QStringLiteral("input/focusShortcut")).toString(),
+             vinson::GlobalShortcut::defaultFocusShortcut().toString(
+                 QKeySequence::PortableText));
     QVERIFY(!settings.value(QStringLiteral("window/geometry")).toByteArray().isEmpty());
     const QStringList keys = settings.allKeys();
     QVERIFY(std::none_of(keys.cbegin(), keys.cend(), [](const QString& key) {

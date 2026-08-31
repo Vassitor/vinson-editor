@@ -23,6 +23,7 @@ struct ApplicationSettings
     bool alwaysOnTop = false;
     bool frameless = false;
     QKeySequence bossKey;
+    QKeySequence focusShortcut;
 
     friend bool operator==(const ApplicationSettings&,
                            const ApplicationSettings&) = default;

@@ -37,9 +37,14 @@ as one Scintilla undo action. `FindReplaceWidget` remains non-modal and returns
 focus to the editor when closed.
 
 `ThemeManager` owns the current in-memory appearance, clamps font sizes, keeps
-text/caret colors opaque, and applies changes through `EditorWidget` without
-touching the document. `SettingsDialog` previews every control immediately;
-Cancel restores the pre-dialog appearance.
+caret and selection colors opaque, and applies independent background and
+editor-text alpha through `EditorWidget` without touching the document. Window
+chrome uses an opaque copy of the text color for readability. `SettingsDialog`
+previews every control immediately; Cancel restores the pre-dialog appearance.
+
+`TrayController` owns two independent `GlobalShortcut` registrations. The boss
+key toggles visibility; the focus shortcut always shows, restores, raises, and
+activates the window, then requests keyboard focus for `EditorWidget`.
 
 `SettingsManager` is the only `QSettings` boundary. It validates font family,
 point size, RGBA colors, booleans, geometry payload size, and the last directory
@@ -99,10 +104,10 @@ Scintilla is compiled as the private static target `Scintilla::Scintilla` from
 the official 5.6.6 source tree. The upstream `ScintillaEdit` layer is used
 because it provides a generated typed API on top of `ScintillaEditBase`.
 The vendored tree remains unmodified: CMake creates a build-directory copy of
-`Editor.cxx` with one guarded RGBA style-background adapter. This is necessary
-because the public style-background message otherwise normalizes every color to
-opaque RGB before the Qt renderer sees it. Configuration fails if the pinned
-source no longer matches the expected adapter point.
+`Editor.cxx` with guarded RGBA style-foreground and style-background adapters.
+This is necessary because the public style-color messages otherwise normalize
+every color to opaque RGB before the Qt renderer sees it. Configuration fails
+if the pinned source no longer matches either expected adapter point.
 Qt 6 builds link Core5Compat because the current upstream Qt adapter uses
 `QTextCodec` for legacy code pages. The build defines the upstream
 `EXPORT_IMPORT_API` annotation as empty because a static library must not expose

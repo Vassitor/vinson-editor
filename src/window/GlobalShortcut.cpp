@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QKeyCombination>
 
+#include <atomic>
+
 #if defined(Q_OS_WIN)
 #include <qt_windows.h>
 #endif
@@ -11,7 +13,7 @@ namespace vinson {
 namespace {
 
 #if defined(Q_OS_WIN)
-constexpr int bossHotkeyId = 0x5645;
+std::atomic_int nextHotkeyId{0x5645};
 
 UINT windowsVirtualKey(Qt::Key key)
 {
@@ -77,6 +79,9 @@ UINT windowsModifiers(Qt::KeyboardModifiers modifiers)
 
 GlobalShortcut::GlobalShortcut(QObject* parent)
     : QObject(parent)
+#if defined(Q_OS_WIN)
+    , nativeHotkeyId_(nextHotkeyId.fetch_add(1, std::memory_order_relaxed))
+#endif
 {
     if (QCoreApplication::instance() != nullptr) {
         QCoreApplication::instance()->installNativeEventFilter(this);
@@ -94,6 +99,11 @@ GlobalShortcut::~GlobalShortcut()
 QKeySequence GlobalShortcut::defaultShortcut()
 {
     return QKeySequence(QStringLiteral("Ctrl+Alt+Space"));
+}
+
+QKeySequence GlobalShortcut::defaultFocusShortcut()
+{
+    return QKeySequence(QStringLiteral("Ctrl+Alt+F"));
 }
 
 bool GlobalShortcut::isSupportedShortcut(
@@ -128,6 +138,11 @@ bool GlobalShortcut::isRegistered() const noexcept
     return registered_;
 }
 
+int GlobalShortcut::nativeHotkeyId() const noexcept
+{
+    return nativeHotkeyId_;
+}
+
 bool GlobalShortcut::setShortcut(const QKeySequence& shortcut, QString* error)
 {
     if (!isSupportedShortcut(shortcut)) {
@@ -149,7 +164,7 @@ bool GlobalShortcut::setShortcut(const QKeySequence& shortcut, QString* error)
 #if defined(Q_OS_WIN)
     const QKeyCombination combination = shortcut[0];
     registered_ = RegisterHotKey(
-        nullptr, bossHotkeyId,
+        nullptr, nativeHotkeyId_,
         windowsModifiers(combination.keyboardModifiers()),
         windowsVirtualKey(combination.key()));
     if (!registered_) {
@@ -176,7 +191,8 @@ bool GlobalShortcut::nativeEventFilter(const QByteArray& eventType,
 #if defined(Q_OS_WIN)
     const auto* nativeMessage = static_cast<const MSG*>(message);
     if (nativeMessage != nullptr && nativeMessage->message == WM_HOTKEY
-        && nativeMessage->wParam == bossHotkeyId) {
+        && nativeMessage->wParam
+            == static_cast<WPARAM>(nativeHotkeyId_)) {
         emit activated();
         return true;
     }
@@ -190,7 +206,7 @@ void GlobalShortcut::unregisterShortcut()
 {
 #if defined(Q_OS_WIN)
     if (registered_) {
-        UnregisterHotKey(nullptr, bossHotkeyId);
+        UnregisterHotKey(nullptr, nativeHotkeyId_);
     }
 #endif
     registered_ = false;

@@ -202,9 +202,8 @@ void EditorWidget::setEditorFont(const QFont& font)
 void EditorWidget::setTextColor(const QColor& color)
 {
     textColor_ = color;
-    textColor_.setAlpha(255);
     styleSetFore(styleIndex(Scintilla::StylesCommon::Default),
-                 scintillaColor(textColor_));
+                 scintillaRgbaStyleColor(textColor_));
     styleClearAll();
     restoreLineNumberStyle();
 }
@@ -513,7 +512,8 @@ void EditorWidget::restoreLineNumberStyle()
     const auto lineNumberStyle =
         styleIndex(Scintilla::StylesCommon::LineNumber);
     if (textColor_.isValid()) {
-        styleSetFore(lineNumberStyle, scintillaColor(textColor_));
+        styleSetFore(lineNumberStyle,
+                     scintillaRgbaStyleColor(textColor_));
     }
     if (backgroundColor_.isValid()) {
         styleSetBack(lineNumberStyle,

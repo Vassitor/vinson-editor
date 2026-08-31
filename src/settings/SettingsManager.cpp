@@ -14,7 +14,7 @@
 namespace vinson {
 namespace {
 
-constexpr int settingsSchemaVersion = 3;
+constexpr int settingsSchemaVersion = 4;
 constexpr qsizetype maximumGeometryBytes = 64 * 1024;
 
 bool readBool(const QSettings& settings, const QString& key,
@@ -87,6 +87,7 @@ ApplicationSettings SettingsManager::defaults()
         false,
         false,
         GlobalShortcut::defaultShortcut(),
+        GlobalShortcut::defaultFocusShortcut(),
     };
 }
 
@@ -145,6 +146,17 @@ ApplicationSettings SettingsManager::load() const
             loaded.bossKey = bossKey;
         }
     }
+    const QVariant focusShortcutValue = settings_->value(
+        QStringLiteral("input/focusShortcut"));
+    if (focusShortcutValue.isValid()) {
+        const QString focusShortcutText = focusShortcutValue.toString();
+        const QKeySequence focusShortcut = QKeySequence::fromString(
+            focusShortcutText, QKeySequence::PortableText);
+        if (focusShortcutText.isEmpty()
+            || GlobalShortcut::isSupportedShortcut(focusShortcut)) {
+            loaded.focusShortcut = focusShortcut;
+        }
+    }
     loaded.lastDirectory = settings_->value(
         QStringLiteral("files/lastDirectory"), loaded.lastDirectory).toString();
     return normalized(std::move(loaded));
@@ -172,6 +184,9 @@ bool SettingsManager::save(const ApplicationSettings& settings)
     settings_->setValue(
         QStringLiteral("input/bossKey"),
         safe.bossKey.toString(QKeySequence::PortableText));
+    settings_->setValue(
+        QStringLiteral("input/focusShortcut"),
+        safe.focusShortcut.toString(QKeySequence::PortableText));
     settings_->setValue(QStringLiteral("view/wordWrap"), safe.wordWrap);
     settings_->setValue(QStringLiteral("view/lineNumbers"), safe.lineNumbers);
     settings_->setValue(QStringLiteral("files/lastDirectory"),
@@ -210,7 +225,6 @@ ApplicationSettings SettingsManager::normalized(ApplicationSettings settings)
     settings.appearance.selectionTextColor = validOr(
         settings.appearance.selectionTextColor,
         fallback.appearance.selectionTextColor);
-    settings.appearance.textColor.setAlpha(255);
     settings.appearance.cursorColor.setAlpha(255);
     settings.appearance.selectionTextColor.setAlpha(255);
 
@@ -222,6 +236,11 @@ ApplicationSettings SettingsManager::normalized(ApplicationSettings settings)
     }
     if (!GlobalShortcut::isSupportedShortcut(settings.bossKey)) {
         settings.bossKey = fallback.bossKey;
+    }
+    if (!GlobalShortcut::isSupportedShortcut(settings.focusShortcut)
+        || (!settings.focusShortcut.isEmpty()
+            && settings.focusShortcut == settings.bossKey)) {
+        settings.focusShortcut = fallback.focusShortcut;
     }
     return settings;
 }

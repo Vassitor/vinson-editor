@@ -19,6 +19,10 @@ void GlobalShortcutTest::validatesBossKeySequences()
 {
     QVERIFY(vinson::GlobalShortcut::isSupportedShortcut(
         vinson::GlobalShortcut::defaultShortcut()));
+    QVERIFY(vinson::GlobalShortcut::isSupportedShortcut(
+        vinson::GlobalShortcut::defaultFocusShortcut()));
+    QVERIFY(vinson::GlobalShortcut::defaultShortcut()
+            != vinson::GlobalShortcut::defaultFocusShortcut());
     QVERIFY(vinson::GlobalShortcut::isSupportedShortcut(QKeySequence()));
     QVERIFY(vinson::GlobalShortcut::isSupportedShortcut(
         QKeySequence(QStringLiteral("Ctrl+Shift+F12"))));
@@ -41,13 +45,28 @@ void GlobalShortcutTest::registersAndDispatchesNativeHotkey()
 
     MSG message{};
     message.message = WM_HOTKEY;
-    message.wParam = 0x5645;
+    message.wParam = static_cast<WPARAM>(shortcut.nativeHotkeyId());
     qintptr result = 0;
     QVERIFY(shortcut.nativeEventFilter(
         QByteArrayLiteral("windows_generic_MSG"), &message, &result));
     QCOMPARE(activatedSpy.count(), 1);
+
+    vinson::GlobalShortcut secondShortcut;
+    QVERIFY(secondShortcut.nativeHotkeyId() != shortcut.nativeHotkeyId());
+    QVERIFY2(secondShortcut.setShortcut(
+                 QKeySequence(QStringLiteral("Ctrl+Alt+F23")), &error),
+             qPrintable(error));
+    QVERIFY(secondShortcut.isRegistered());
+    QSignalSpy secondActivatedSpy(
+        &secondShortcut, &vinson::GlobalShortcut::activated);
+    message.wParam = static_cast<WPARAM>(secondShortcut.nativeHotkeyId());
+    QVERIFY(!shortcut.nativeEventFilter(
+        QByteArrayLiteral("windows_generic_MSG"), &message, &result));
+    QVERIFY(secondShortcut.nativeEventFilter(
+        QByteArrayLiteral("windows_generic_MSG"), &message, &result));
+    QCOMPARE(secondActivatedSpy.count(), 1);
 #else
-    QSKIP("Native boss-key registration is Windows-specific.");
+    QSKIP("Native global-shortcut registration is Windows-specific.");
 #endif
 }
 

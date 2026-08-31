@@ -162,6 +162,16 @@ const QKeySequence& MainWindow::bossKey() const noexcept
     return bossKey_;
 }
 
+const QKeySequence& MainWindow::focusShortcut() const noexcept
+{
+    return focusShortcut_;
+}
+
+void MainWindow::focusEditor()
+{
+    editor_->QWidget::setFocus(Qt::ShortcutFocusReason);
+}
+
 void MainWindow::requestApplicationQuit()
 {
     if (fileManager_->isBusy()) {
@@ -183,6 +193,14 @@ void MainWindow::handleBossKeyRegistrationFailure(
     const QKeySequence& activeShortcut, const QString& message)
 {
     bossKey_ = activeShortcut;
+    savePersistentSettings();
+    statusBar()->showMessage(message, 6000);
+}
+
+void MainWindow::handleFocusShortcutRegistrationFailure(
+    const QKeySequence& activeShortcut, const QString& message)
+{
+    focusShortcut_ = activeShortcut;
     savePersistentSettings();
     statusBar()->showMessage(message, 6000);
 }
@@ -459,15 +477,28 @@ void MainWindow::showGoToLine()
 void MainWindow::showSettings()
 {
     const Appearance original = themeManager_->appearance();
-    SettingsDialog dialog(original, bossKey_, this);
+    SettingsDialog dialog(original, bossKey_, focusShortcut_, this);
     connect(&dialog, &SettingsDialog::previewChanged,
             themeManager_, &ThemeManager::applyAppearance);
     if (dialog.exec() != QDialog::Accepted) {
         themeManager_->applyAppearance(original);
     } else {
-        if (bossKey_ != dialog.bossKey()) {
+        const bool bossKeyWasChanged = bossKey_ != dialog.bossKey();
+        const bool focusShortcutWasChanged =
+            focusShortcut_ != dialog.focusShortcut();
+        if (bossKeyWasChanged && focusShortcutWasChanged) {
+            // Release both registrations first so users can swap the two
+            // shortcuts without either old registration blocking the other.
+            emit bossKeyChanged(QKeySequence());
+            emit focusShortcutChanged(QKeySequence());
+        }
+        if (bossKeyWasChanged) {
             bossKey_ = dialog.bossKey();
             emit bossKeyChanged(bossKey_);
+        }
+        if (focusShortcutWasChanged) {
+            focusShortcut_ = dialog.focusShortcut();
+            emit focusShortcutChanged(focusShortcut_);
         }
         savePersistentSettings();
     }
@@ -717,6 +748,7 @@ void MainWindow::restorePersistentSettings()
     windowController_->setAlwaysOnTop(settings.alwaysOnTop);
     windowController_->setFrameless(settings.frameless);
     bossKey_ = settings.bossKey;
+    focusShortcut_ = settings.focusShortcut;
     if (!settings.windowGeometry.isEmpty()) {
         restoreGeometry(settings.windowGeometry);
     }
@@ -739,6 +771,7 @@ void MainWindow::savePersistentSettings()
         windowController_->isAlwaysOnTop(),
         windowController_->persistableFrameless(),
         bossKey_,
+        focusShortcut_,
     };
     if (!settingsManager_->save(settings)) {
         qWarning() << "Could not persist settings to"
