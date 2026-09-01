@@ -18,6 +18,7 @@ private slots:
     void readsBoundedTextRanges();
     void searchesAcrossResponsiveSliceBoundary();
     void requestsFontSizeAdjustmentFromControlWheel();
+    void exposesAndRestoresEditHistory();
 };
 
 void EditorWidgetTest::defaultsToWrappedTextWithoutHorizontalScrolling()
@@ -140,6 +141,35 @@ void EditorWidgetTest::requestsFontSizeAdjustmentFromControlWheel()
     QApplication::sendEvent(editor.viewport(), &down);
     QCOMPARE(adjustmentSpy.count(), 1);
     QCOMPARE(adjustmentSpy.takeFirst().at(0).toInt(), -2);
+}
+
+void EditorWidgetTest::exposesAndRestoresEditHistory()
+{
+    vinson::EditorWidget editor;
+    editor.resize(480, 240);
+    editor.show();
+    editor.QWidget::setFocus();
+
+    QTest::keyClicks(&editor, QStringLiteral("abc"));
+    QTest::keyClick(&editor, Qt::Key_Left);
+    QTest::keyClicks(&editor, QStringLiteral("X"));
+
+    const QVector<vinson::EditHistoryEntry> history = editor.editHistory();
+    QCOMPARE(history.size(), 2);
+    QCOMPARE(history.at(0).kind, vinson::EditHistoryKind::Insert);
+    QCOMPARE(history.at(0).preview, QStringLiteral("abc"));
+    QCOMPARE(history.at(1).preview, QStringLiteral("X"));
+    QCOMPARE(editor.textUtf8(), QByteArray("abXc"));
+
+    QVERIFY(editor.restoreEditHistoryPosition(history.at(0).undoPosition));
+    QCOMPARE(editor.textUtf8(), QByteArray("abc"));
+    QCOMPARE(editor.currentEditHistoryPosition(),
+             history.at(0).undoPosition);
+
+    QVERIFY(editor.restoreEditHistoryPosition(history.at(1).undoPosition));
+    QCOMPARE(editor.textUtf8(), QByteArray("abXc"));
+    QVERIFY(editor.restoreEditHistoryPosition(0));
+    QVERIFY(editor.textUtf8().isEmpty());
 }
 
 QTEST_MAIN(EditorWidgetTest)

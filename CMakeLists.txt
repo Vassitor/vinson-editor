@@ -76,6 +76,8 @@ add_library(vinson_editor_ui STATIC
     src/settings/ThemeManager.h
     src/ui/FindReplaceWidget.cpp
     src/ui/FindReplaceWidget.h
+    src/ui/EditHistoryWidget.cpp
+    src/ui/EditHistoryWidget.h
     src/ui/MenuAppearance.cpp
     src/ui/MenuAppearance.h
     src/ui/SettingsDialog.cpp

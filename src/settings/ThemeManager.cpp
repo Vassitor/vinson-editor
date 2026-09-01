@@ -91,9 +91,9 @@ void ThemeManager::setFramelessMode(bool frameless)
     }
     framelessMode_ = frameless;
 
-    // Both native-frame and custom-frame windows paint background alpha per
-    // pixel. DWM redirection-bitmap alpha keeps foreground glyphs opaque in a
-    // framed window instead of applying opacity to the complete window.
+    // Background alpha is a distraction in the normal framed window. Keep the
+    // configured value, but apply it only while custom chrome is active. The
+    // minimal mode also enables frameless mode, so it follows the same rule.
     editor_->setBackgroundColor(paintedBackgroundColor());
     applyScrollBarAppearance();
     applyWindowAppearance();
@@ -123,29 +123,46 @@ void ThemeManager::applyScrollBarAppearance()
         trackColor, appearance_.textColor, 52);
 
     editor_->setStyleSheet(QStringLiteral(R"(
+QWidget#qt_scrollarea_vcontainer,
+QWidget#qt_scrollarea_hcontainer {
+    background: %1;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+QAbstractScrollArea::corner {
+    background: %1;
+    border: none;
+}
 QScrollBar:vertical {
     background: %1;
+    border: none;
     width: 10px;
     margin: 0;
+    padding: 0;
 }
 QScrollBar::handle:vertical {
     background: %2;
     min-height: 28px;
-    border: 2px solid %1;
-    border-radius: 5px;
+    border: none;
+    border-radius: 4px;
+    margin: 1px 1px 1px 0;
 }
 QScrollBar::handle:vertical:hover { background: %3; }
 QScrollBar::handle:vertical:pressed { background: %4; }
 QScrollBar:horizontal {
     background: %1;
+    border: none;
     height: 10px;
     margin: 0;
+    padding: 0;
 }
 QScrollBar::handle:horizontal {
     background: %2;
     min-width: 28px;
-    border: 2px solid %1;
-    border-radius: 5px;
+    border: none;
+    border-radius: 4px;
+    margin: 0 1px 1px 1px;
 }
 QScrollBar::handle:horizontal:hover { background: %3; }
 QScrollBar::handle:horizontal:pressed { background: %4; }
@@ -157,7 +174,7 @@ QScrollBar::sub-line {
     background: none;
 }
 QScrollBar::add-page,
-QScrollBar::sub-page { background: transparent; }
+QScrollBar::sub-page { background: %1; }
 )")
         .arg(trackColor.name(trackColor.alpha() == 255
                                  ? QColor::HexRgb : QColor::HexArgb),
@@ -203,7 +220,11 @@ void ThemeManager::applyWindowAppearance()
 
 QColor ThemeManager::paintedBackgroundColor() const
 {
-    return appearance_.backgroundColor;
+    QColor background = appearance_.backgroundColor;
+    if (!framelessMode_) {
+        background.setAlpha(255);
+    }
+    return background;
 }
 
 void ThemeManager::applyNativeWindowAppearance()
@@ -211,8 +232,8 @@ void ThemeManager::applyNativeWindowAppearance()
     if (!window_->isVisible()) {
         return;
     }
-    (void)setNativeBackgroundAlphaEnabled(window_, true);
-    applyNativeTitleBarColors(window_, appearance_.backgroundColor,
+    (void)setNativeBackgroundAlphaEnabled(window_, framelessMode_);
+    applyNativeTitleBarColors(window_, paintedBackgroundColor(),
                               opaqueColor(appearance_.textColor));
 }
 

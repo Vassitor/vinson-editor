@@ -6,6 +6,8 @@
 #include <QByteArrayView>
 #include <QColor>
 #include <QFont>
+#include <QString>
+#include <QVector>
 
 #include "file/FileTypes.h"
 #include "largefile/LargeFilePolicy.h"
@@ -15,6 +17,22 @@ class QContextMenuEvent;
 class QWheelEvent;
 
 namespace vinson {
+
+enum class EditHistoryKind {
+    Insert,
+    Delete,
+    Replace,
+    Other,
+};
+
+struct EditHistoryEntry {
+    int undoPosition = 0;
+    EditHistoryKind kind = EditHistoryKind::Other;
+    qint64 position = 0;
+    qint64 insertedBytes = 0;
+    qint64 deletedBytes = 0;
+    QString preview;
+};
 
 class EditorWidget final : public ScintillaEdit
 {
@@ -50,6 +68,7 @@ public:
     [[nodiscard]] bool isWordWrapEnabled() const;
     void setLineNumbersVisible(bool visible);
     [[nodiscard]] bool areLineNumbersVisible() const;
+    void refreshScrollBarLayout();
 
     [[nodiscard]] qint64 documentLength() const;
     [[nodiscard]] qint64 selectionStartPosition() const;
@@ -72,11 +91,17 @@ public:
     [[nodiscard]] qint64 currentOneBasedLine() const;
     bool goToOneBasedLine(qint64 line);
 
+    [[nodiscard]] QVector<EditHistoryEntry> editHistory() const;
+    [[nodiscard]] int currentEditHistoryPosition() const;
+    [[nodiscard]] int savedEditHistoryPosition() const;
+    bool restoreEditHistoryPosition(int undoPosition);
+
     [[nodiscard]] QSize minimumSizeHint() const override;
 
 signals:
     void cursorPositionChanged(qsizetype line, qsizetype column);
     void documentModified(bool modified);
+    void editHistoryChanged();
     void findRequested();
     void fontSizeAdjustmentRequested(int steps);
 

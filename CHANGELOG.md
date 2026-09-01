@@ -9,6 +9,8 @@ the Semantic Versioning scheme.
 
 ### Added
 
+- A dockable edit-history timeline backed by Scintilla's native undo stack,
+  with current/saved markers and restoration to any logical edit state.
 - Persistent font-size adjustment with `Ctrl+Mouse Wheel`.
 - A user-selectable wrap-around option in the non-modal find/replace panel.
 - Simplified Chinese editions of the README, changelog, architecture,

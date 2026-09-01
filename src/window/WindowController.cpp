@@ -425,18 +425,7 @@ void WindowController::refreshEditorScrollBars()
         if (editor == nullptr) {
             return;
         }
-        const bool horizontalVisible = editor->hScrollBar();
-        const bool verticalVisible = editor->vScrollBar();
-        if (horizontalVisible) {
-            editor->setHScrollBar(false);
-            editor->setHScrollBar(true);
-        }
-        if (verticalVisible) {
-            editor->setVScrollBar(false);
-            editor->setVScrollBar(true);
-        }
-        editor->updateGeometry();
-        editor->viewport()->update();
+        editor->refreshScrollBarLayout();
     };
     refresh();
     QTimer::singleShot(0, editor_, refresh);

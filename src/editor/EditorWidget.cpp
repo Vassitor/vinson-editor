@@ -9,6 +9,7 @@
 #include <QEventLoop>
 #include <QMenu>
 #include <QFontMetricsF>
+#include <QScrollBar>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -22,6 +23,24 @@ namespace {
 constexpr auto styleIndex(Scintilla::StylesCommon style) noexcept
 {
     return static_cast<sptr_t>(style);
+}
+
+constexpr int undoActionKindMask = 0x0f;
+constexpr int undoActionMayCoalesce = 0x100;
+constexpr int undoActionInsert = 0;
+constexpr int undoActionDelete = 1;
+
+QString historyPreview(const QByteArray& text)
+{
+    QString preview = QString::fromUtf8(text);
+    preview.replace(QLatin1Char('\r'), QChar(0x21b5));
+    preview.replace(QLatin1Char('\n'), QChar(0x21b5));
+    preview.replace(QLatin1Char('\t'), QChar(0x21e5));
+    constexpr qsizetype maximumCharacters = 48;
+    if (preview.size() > maximumCharacters) {
+        preview = preview.left(maximumCharacters - 1) + QChar(0x2026);
+    }
+    return preview;
 }
 
 } // namespace
@@ -51,6 +70,19 @@ EditorWidget::EditorWidget(QWidget* parent)
             this, [this](Scintilla::Update) { emitCursorPosition(); });
     connect(this, &ScintillaEditBase::linesAdded,
             this, [this](Scintilla::Position) { refreshLineNumberMargin(); });
+    connect(this, &ScintillaEditBase::modified, this,
+            [this](Scintilla::ModificationFlags type, Scintilla::Position,
+                   Scintilla::Position, Scintilla::Position,
+                   const QByteArray&, Scintilla::Position,
+                   Scintilla::FoldLevel, Scintilla::FoldLevel) {
+                const int flags = static_cast<int>(type);
+                const int textChanges =
+                    static_cast<int>(Scintilla::ModificationFlags::InsertText)
+                    | static_cast<int>(Scintilla::ModificationFlags::DeleteText);
+                if ((flags & textChanges) != 0) {
+                    emit editHistoryChanged();
+                }
+            });
 }
 
 void EditorWidget::setTextUtf8(QByteArrayView text)
@@ -281,6 +313,25 @@ bool EditorWidget::areLineNumbersVisible() const
     return lineNumbersVisible_;
 }
 
+void EditorWidget::refreshScrollBarLayout()
+{
+    const bool horizontalVisible = hScrollBar();
+    const bool verticalVisible = vScrollBar();
+    if (horizontalVisible) {
+        setHScrollBar(false);
+        setHScrollBar(true);
+    }
+    if (verticalVisible) {
+        setVScrollBar(false);
+        setVScrollBar(true);
+    }
+    updateGeometry();
+    verticalScrollBar()->updateGeometry();
+    horizontalScrollBar()->updateGeometry();
+    viewport()->update();
+    update();
+}
+
 qint64 EditorWidget::documentLength() const
 {
     return static_cast<qint64>(textLength());
@@ -440,6 +491,94 @@ bool EditorWidget::goToOneBasedLine(qint64 line)
     scrollCaret();
     QWidget::setFocus();
     return true;
+}
+
+QVector<EditHistoryEntry> EditorWidget::editHistory() const
+{
+    QVector<EditHistoryEntry> entries;
+    const int actionCount = static_cast<int>(undoActions());
+    if (actionCount <= 0) {
+        return entries;
+    }
+
+    EditHistoryEntry entry;
+    entry.position = std::numeric_limits<qint64>::max();
+    QByteArray previewText;
+    for (int action = 0; action < actionCount; ++action) {
+        const int type = static_cast<int>(undoActionType(action));
+        const int kind = type & undoActionKindMask;
+        const qint64 textLength = static_cast<qint64>(
+            send(SCI_GETUNDOACTIONTEXT, static_cast<uptr_t>(action), 0));
+        entry.position = std::min(
+            entry.position,
+            static_cast<qint64>(undoActionPosition(action)));
+        if (kind == undoActionInsert) {
+            entry.insertedBytes += textLength;
+        } else if (kind == undoActionDelete) {
+            entry.deletedBytes += textLength;
+        }
+        constexpr qsizetype maximumPreviewBytes = 192;
+        const qsizetype available = maximumPreviewBytes - previewText.size();
+        if (textLength > 0 && textLength <= available) {
+            previewText.append(undoActionText(action));
+        }
+
+        const bool completesEntry =
+            (type & undoActionMayCoalesce) == 0 || action + 1 == actionCount;
+        if (!completesEntry) {
+            continue;
+        }
+
+        entry.undoPosition = action + 1;
+        entry.preview = historyPreview(previewText);
+        if (entry.insertedBytes > 0 && entry.deletedBytes > 0) {
+            entry.kind = EditHistoryKind::Replace;
+        } else if (entry.insertedBytes > 0) {
+            entry.kind = EditHistoryKind::Insert;
+        } else if (entry.deletedBytes > 0) {
+            entry.kind = EditHistoryKind::Delete;
+        }
+        if (entry.position == std::numeric_limits<qint64>::max()) {
+            entry.position = 0;
+        }
+        entries.append(entry);
+        entry = {};
+        entry.position = std::numeric_limits<qint64>::max();
+        previewText.clear();
+    }
+    return entries;
+}
+
+int EditorWidget::currentEditHistoryPosition() const
+{
+    return static_cast<int>(undoCurrent());
+}
+
+int EditorWidget::savedEditHistoryPosition() const
+{
+    return static_cast<int>(undoSavePoint());
+}
+
+bool EditorWidget::restoreEditHistoryPosition(int undoPosition)
+{
+    if (undoPosition < 0
+        || static_cast<sptr_t>(undoPosition) > undoActions()) {
+        return false;
+    }
+
+    while (undoCurrent() > undoPosition && canUndo()) {
+        undo();
+    }
+    while (undoCurrent() < undoPosition && canRedo()) {
+        redo();
+    }
+    const bool restored = undoCurrent() == undoPosition;
+    if (restored) {
+        scrollCaret();
+        QWidget::setFocus();
+        emit editHistoryChanged();
+    }
+    return restored;
 }
 
 QSize EditorWidget::minimumSizeHint() const

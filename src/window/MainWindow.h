@@ -10,6 +10,7 @@
 
 class QAction;
 class QCloseEvent;
+class QDockWidget;
 class QDragEnterEvent;
 class QDropEvent;
 class QLabel;
@@ -19,6 +20,7 @@ class QPushButton;
 namespace vinson {
 
 class EditorWidget;
+class EditHistoryWidget;
 class FileManager;
 class FindReplaceWidget;
 class SearchController;
@@ -82,6 +84,8 @@ private:
     [[nodiscard]] QString chooseSavePath();
 
     EditorWidget* editor_ = nullptr;
+    EditHistoryWidget* editHistoryWidget_ = nullptr;
+    QDockWidget* editHistoryDock_ = nullptr;
     FileManager* fileManager_ = nullptr;
     SearchController* searchController_ = nullptr;
     FindReplaceWidget* findReplaceWidget_ = nullptr;
@@ -104,6 +108,7 @@ private:
     QAction* goToLineAction_ = nullptr;
     QAction* wrapAction_ = nullptr;
     QAction* lineNumberAction_ = nullptr;
+    QAction* editHistoryAction_ = nullptr;
     QAction* framelessAction_ = nullptr;
     QAction* minimalModeAction_ = nullptr;
     QAction* increaseBackgroundAlphaAction_ = nullptr;

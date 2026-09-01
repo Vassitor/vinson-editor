@@ -57,12 +57,12 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     QCOMPARE(editor->editorFont().pointSizeF(), 18.5);
     QCOMPARE(editor->textColor(), QColor(10, 20, 30, 10));
     QCOMPARE(manager.appearance().backgroundColor, QColor(40, 50, 60, 127));
-    QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
+    QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 255));
     QCOMPARE(editor->cursorColor(), QColor(70, 80, 90, 255));
     QCOMPARE(editor->selectionTextColor(), QColor(100, 110, 120, 255));
-    QCOMPARE(window.palette().color(QPalette::Window), QColor(40, 50, 60, 127));
+    QCOMPARE(window.palette().color(QPalette::Window), QColor(40, 50, 60, 255));
     QCOMPARE(window.windowOpacity(), 1.0);
-    QVERIFY(!editor->bufferedDraw());
+    QVERIFY(editor->bufferedDraw());
 
     manager.setFramelessMode(true);
     QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
@@ -72,9 +72,11 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     QVERIFY(editor->styleSheet().contains(QStringLiteral("#7f28323c")));
 
     manager.setFramelessMode(false);
-    QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 127));
+    QCOMPARE(manager.appearance().backgroundColor, QColor(40, 50, 60, 127));
+    QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 255));
+    QCOMPARE(window.palette().color(QPalette::Window), QColor(40, 50, 60, 255));
     QCOMPARE(window.windowOpacity(), 1.0);
-    QVERIFY(!editor->bufferedDraw());
+    QVERIFY(editor->bufferedDraw());
 
     appearance.backgroundColor.setAlpha(255);
     manager.applyAppearance(appearance);
@@ -109,8 +111,14 @@ void AppearanceTest::appliesReadableWindowChromePalette()
     QVERIFY(window.statusBar()->autoFillBackground());
     QVERIFY(editor->styleSheet().contains(QStringLiteral("QScrollBar:vertical")));
     QVERIFY(editor->styleSheet().contains(QStringLiteral("QScrollBar:horizontal")));
+    QVERIFY(editor->styleSheet().contains(
+        QStringLiteral("QWidget#qt_scrollarea_vcontainer")));
+    QVERIFY(editor->styleSheet().contains(
+        QStringLiteral("QAbstractScrollArea::corner")));
     QVERIFY(editor->styleSheet().contains(QStringLiteral("background: #f0e6dc")));
-    QVERIFY(editor->styleSheet().contains(QStringLiteral("border-radius: 5px")));
+    QVERIFY(editor->styleSheet().contains(QStringLiteral("border-radius: 4px")));
+    QVERIFY(editor->styleSheet().contains(
+        QStringLiteral("QScrollBar::sub-page { background: #f0e6dc; }")));
 }
 
 void AppearanceTest::transparentBackgroundKeepsTextVisible()

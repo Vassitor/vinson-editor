@@ -6,9 +6,11 @@
 
 #include <QAction>
 #include <QGuiApplication>
+#include <QDockWidget>
 #include <QMainWindow>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPushButton>
 #include <QScreen>
 #include <QSettings>
 #include <QStatusBar>
@@ -32,6 +34,7 @@ private slots:
     void controlWheelFontSizeIsPersistent();
     void focusRequestTargetsEditor();
     void titleBarMenusUseNativeShadows();
+    void exposesEditHistoryPanel();
     void closeToTrayPreservesUnsavedDocument();
     void explicitQuitIsSeparateFromCloseToTray();
     void savesChangedApplicationState();
@@ -188,12 +191,14 @@ void MainWindowPersistenceTest::backgroundOpacityShortcutsArePersistent()
     vinson::MainWindow window;
     auto* editor = window.findChild<vinson::EditorWidget*>();
     auto* theme = window.findChild<vinson::ThemeManager*>();
+    auto* controller = window.findChild<vinson::WindowController*>();
     auto* increase = window.findChild<QAction*>(
         QStringLiteral("increaseBackgroundAlphaAction"));
     auto* decrease = window.findChild<QAction*>(
         QStringLiteral("decreaseBackgroundAlphaAction"));
     QVERIFY(editor != nullptr);
     QVERIFY(theme != nullptr);
+    QVERIFY(controller != nullptr);
     QVERIFY(increase != nullptr);
     QVERIFY(decrease != nullptr);
     QCOMPARE(increase->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_Up));
@@ -208,6 +213,9 @@ void MainWindowPersistenceTest::backgroundOpacityShortcutsArePersistent()
 
     QTest::keyClick(editor, Qt::Key_Down, Qt::ControlModifier);
     QTRY_COMPARE(theme->appearance().backgroundColor.alpha(), 250);
+    QCOMPARE(editor->backgroundColor().alpha(), 255);
+    QCOMPARE(window.palette().color(QPalette::Window).alpha(), 255);
+    QVERIFY(editor->bufferedDraw());
     QCOMPARE(editor->textUtf8(), QByteArray("shortcut keeps document text"));
     QVERIFY(!editor->modify());
     {
@@ -216,6 +224,22 @@ void MainWindowPersistenceTest::backgroundOpacityShortcutsArePersistent()
                      .toString().left(3),
                  QStringLiteral("#fa"));
     }
+
+    controller->setFrameless(true);
+    QCOMPARE(editor->backgroundColor().alpha(), 250);
+    QCOMPARE(window.palette().color(QPalette::Window).alpha(), 250);
+    QVERIFY(!editor->bufferedDraw());
+    controller->setFrameless(false);
+    QCOMPARE(editor->backgroundColor().alpha(), 255);
+    QCOMPARE(window.palette().color(QPalette::Window).alpha(), 255);
+    QVERIFY(editor->bufferedDraw());
+
+    controller->setMinimalMode(true);
+    QCOMPARE(editor->backgroundColor().alpha(), 250);
+    QCOMPARE(window.palette().color(QPalette::Window).alpha(), 250);
+    controller->setMinimalMode(false);
+    QCOMPARE(editor->backgroundColor().alpha(), 255);
+    QCOMPARE(window.palette().color(QPalette::Window).alpha(), 255);
 
     QTest::keyClick(editor, Qt::Key_Up, Qt::ControlModifier);
     QTRY_COMPARE(theme->appearance().backgroundColor.alpha(), 255);
@@ -284,6 +308,89 @@ void MainWindowPersistenceTest::titleBarMenusUseNativeShadows()
         QVERIFY(menu->graphicsEffect() == nullptr);
     }
     QCOMPARE(menuCount, 5);
+}
+
+void MainWindowPersistenceTest::exposesEditHistoryPanel()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* action = window.findChild<QAction*>(
+        QStringLiteral("editHistoryAction"));
+    auto* dock = window.findChild<QDockWidget*>(
+        QStringLiteral("editHistoryDock"));
+    auto* historyWidget = window.findChild<QWidget*>(
+        QStringLiteral("editHistoryWidget"));
+    auto* historyViewport = window.findChild<QWidget*>(
+        QStringLiteral("editHistoryListViewport"));
+    auto* restoreButton = window.findChild<QPushButton*>(
+        QStringLiteral("editHistoryRestoreButton"));
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    auto* theme = window.findChild<vinson::ThemeManager*>();
+    QVERIFY(action != nullptr);
+    QVERIFY(dock != nullptr);
+    QVERIFY(historyWidget != nullptr);
+    QVERIFY(historyViewport != nullptr);
+    QVERIFY(restoreButton != nullptr);
+    QVERIFY(editor != nullptr);
+    QVERIFY(theme != nullptr);
+    QCOMPARE(action->shortcut(),
+             QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H));
+    QVERIFY(!dock->isVisible());
+
+    window.show();
+    action->setChecked(true);
+    QTRY_VERIFY(dock->isVisible());
+    QVERIFY(action->isChecked());
+
+    vinson::Appearance appearance = theme->appearance();
+    appearance.backgroundColor = QColor(30, 40, 50, 48);
+    appearance.textColor = QColor(220, 230, 240, 32);
+    theme->applyAppearance(appearance);
+
+    const QColor dockBorder =
+        dock->property("historyBorderColor").value<QColor>();
+    const QColor panelBorder =
+        historyWidget->property("historyBorderColor").value<QColor>();
+    const QColor separator =
+        window.property("historySeparatorColor").value<QColor>();
+    QVERIFY(dockBorder.isValid());
+    QVERIFY(panelBorder.isValid());
+    QVERIFY(separator.isValid());
+    QCOMPARE(dockBorder.alpha(), 255);
+    QCOMPARE(panelBorder.alpha(), 255);
+    QCOMPARE(separator.alpha(), 255);
+    QCOMPARE(historyWidget->palette().color(QPalette::Window).alpha(), 255);
+    QCOMPARE(historyViewport->palette().color(QPalette::Window).alpha(), 255);
+    QVERIFY(historyWidget->testAttribute(Qt::WA_StyledBackground));
+    QVERIFY(historyWidget->testAttribute(Qt::WA_OpaquePaintEvent));
+    QVERIFY(historyViewport->testAttribute(Qt::WA_StyledBackground));
+    QVERIFY(restoreButton->minimumHeight() >= 42);
+    QVERIFY(!dock->testAttribute(Qt::WA_TranslucentBackground));
+    QVERIFY(dock->styleSheet().contains(
+        QStringLiteral("border: 1px solid %1").arg(
+            dockBorder.name(QColor::HexRgb))));
+    QVERIFY(historyWidget->styleSheet().contains(
+        QStringLiteral("QListWidget#editHistoryList::item:selected")));
+    QVERIFY(historyWidget->styleSheet().contains(
+        QStringLiteral("background: #1e2832")));
+    QVERIFY(historyWidget->styleSheet().contains(
+        QStringLiteral("QWidget#editHistoryListViewport")));
+    QVERIFY(window.styleSheet().contains(
+        QStringLiteral("QMainWindow#vinsonMainWindow::separator")));
+
+    QVERIFY(editor->styleSheet().contains(
+        QStringLiteral("QWidget#qt_scrollarea_vcontainer")));
+    QVERIFY(editor->styleSheet().contains(
+        QStringLiteral("margin: 1px 1px 1px 0")));
+
+    dock->setFloating(true);
+    QTRY_VERIFY(dock->isFloating());
+    QCOMPARE(dock->property("historyFloating").toBool(), true);
+    QVERIFY(dock->styleSheet().contains(QStringLiteral("border: none")));
+    QVERIFY(dock->styleSheet().contains(QStringLiteral("background: #1e2832")));
 }
 
 void MainWindowPersistenceTest::closeToTrayPreservesUnsavedDocument()

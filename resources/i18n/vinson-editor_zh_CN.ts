@@ -31,6 +31,8 @@
     <message><source>Word &amp;Wrap</source><translation>自动换行(&amp;W)</translation></message>
     <message><source>Word wrap may be slow in %1.</source><translation>在%1下自动换行可能较慢。</translation></message>
     <message><source>Line &amp;Numbers</source><translation>行号(&amp;N)</translation></message>
+    <message><source>Edit History</source><translation>编辑历史</translation></message>
+    <message><source>Edit &amp;History</source><translation>编辑历史(&amp;H)</translation></message>
     <message><source>Always on &amp;Top</source><translation>总在最前(&amp;T)</translation></message>
     <message><source>&amp;Frameless Mode</source><translation>无边框模式(&amp;F)</translation></message>
     <message><source>&amp;Minimal Mode</source><translation>极简模式(&amp;M)</translation></message>
@@ -63,6 +65,19 @@
     <message><source>Save changes to %1?</source><translation>是否保存对 %1 的更改？</translation></message>
     <message><source>Save Text File</source><translation>保存文本文件</translation></message>
     <message><source>Text files (*.txt);;All files (*)</source><translation>文本文件 (*.txt);;所有文件 (*)</translation></message>
+</context>
+<context>
+    <name>vinson::EditHistoryWidget</name>
+    <message><source>Inserted %1 bytes</source><translation>插入 %1 字节</translation></message>
+    <message><source>Deleted %1 bytes</source><translation>删除 %1 字节</translation></message>
+    <message><source>Replaced text</source><translation>替换文本</translation></message>
+    <message><source>Edited document</source><translation>编辑文档</translation></message>
+    <message><source>No edits in this document.</source><translation>此文档尚无编辑记录。</translation></message>
+    <message><source>Restore Selected</source><translation>恢复所选状态</translation></message>
+    <message><source>Current</source><translation>当前</translation></message>
+    <message><source>Saved</source><translation>已保存</translation></message>
+    <message><source>%1 (%2)</source><translation>%1（%2）</translation></message>
+    <message><source>Initial state</source><translation>初始状态</translation></message>
 </context>
 <context>
     <name>vinson::TrayController</name>

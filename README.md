@@ -13,6 +13,8 @@ modes, and a specialized large-document path.
 - Native Qt 6 desktop window with menu and status bar
 - Scintilla 5.6.6 editing widget, compiled directly from upstream source
 - UTF-8 text input, undo/redo, clipboard actions, wrapping, and line numbers
+- Dockable per-document-session edit-history timeline with current/saved markers
+  and state restoration
 - New, Open, Save, Save As, Reload, Exit, and single-file drag-and-drop
 - Unsaved-change protection for New, Open, Reload, and Exit
 - UTF-8, UTF-8 BOM, ASCII, UTF-16 LE, and UTF-16 BE round trips
@@ -132,6 +134,7 @@ dependency policy.
 | Find / Replace | `Ctrl+F` / `Ctrl+H` |
 | Find next / previous | `F3` / `Shift+F3` |
 | Go to line | `Ctrl+G` |
+| Edit history | `Ctrl+Shift+H` |
 | Adjust font size | `Ctrl+Mouse Wheel` |
 | Always on top | `Ctrl+Shift+T` |
 | Frameless mode | `F11` |

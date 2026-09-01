@@ -11,6 +11,7 @@ main
           -> WindowController（窗口标志及原生移动/缩放请求）
           -> FindReplaceWidget（非模态搜索控件）
               -> SearchController（搜索/替换编排）
+          -> EditHistoryWidget（撤销栈时间线与状态恢复）
           -> SettingsDialog（实时外观控件）
               -> ThemeManager（经过校验的外观状态）
           -> EditorWidget（稳定的编辑器接口）
@@ -27,6 +28,8 @@ main
 `MainWindow` 负责界面呈现和操作连接，但不直接发送原始 Scintilla 消息。`EditorWidget` 是上游控件的边界，负责编码模式、样式、视图选项、文本访问，以及将通知转换为应用级 Qt 信号。
 
 `SearchController` 将用户级搜索状态转换为 `EditorWidget` 暴露的窄接口。搜索直接使用 Scintilla 目标范围，包括向前/向后遍历和可选循环查找，因此控制器和查找替换控件都不需要复制完整文档。全部替换会合并为一个 Scintilla 撤销操作。`FindReplaceWidget` 保持非模态，并在关闭时将焦点归还编辑器。
+
+`EditHistoryWidget` 直接读取 Scintilla 原生撤销栈中的逻辑编辑组，不保留文档快照。它显示初始、当前和已保存状态，并通过重放撤销或重做组来恢复所选状态。打开或新建文档会清空底层撤销栈，因此历史始终只属于当前文档。
 
 `ThemeManager` 持有当前内存中的外观状态，限制字号范围，保持光标和选中文字颜色不透明，并通过 `EditorWidget` 分别应用背景与编辑区文字的 alpha，而不触碰文档。窗口控件使用文字颜色的不透明副本以保持清晰。`SettingsDialog` 会立即预览每项设置；取消时恢复打开对话框之前的外观。
 

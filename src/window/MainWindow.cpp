@@ -7,6 +7,7 @@
 #include "settings/SettingsManager.h"
 #include "settings/ThemeManager.h"
 #include "ui/FindReplaceWidget.h"
+#include "ui/EditHistoryWidget.h"
 #include "ui/MenuAppearance.h"
 #include "ui/SettingsDialog.h"
 #include "window/WindowController.h"
@@ -15,6 +16,7 @@
 #include <QCloseEvent>
 #include <QDir>
 #include <QDebug>
+#include <QDockWidget>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
@@ -34,6 +36,7 @@
 #include <QSignalBlocker>
 #include <QScreen>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -57,6 +60,7 @@ MainWindow::MainWindow(QWidget* parent)
 {
     // Transparency capability has to exist before the native top-level window
     // is created. Later phases can change only the painted background alpha.
+    setObjectName(QStringLiteral("vinsonMainWindow"));
     setAttribute(Qt::WA_TranslucentBackground);
     themeManager_ = new ThemeManager(editor_, this, this);
     settingsManager_ = new SettingsManager(this);
@@ -68,6 +72,40 @@ MainWindow::MainWindow(QWidget* parent)
     centralLayout->addWidget(findReplaceWidget_);
     centralLayout->addWidget(editor_, 1);
     setCentralWidget(centralWidget);
+    editHistoryWidget_ = new EditHistoryWidget(editor_, this);
+    editHistoryDock_ = new QDockWidget(tr("Edit History"), this);
+    editHistoryDock_->setObjectName(QStringLiteral("editHistoryDock"));
+    editHistoryDock_->setAllowedAreas(Qt::LeftDockWidgetArea
+                                      | Qt::RightDockWidgetArea);
+    editHistoryDock_->setWidget(editHistoryWidget_);
+    editHistoryDock_->setMinimumWidth(240);
+    addDockWidget(Qt::RightDockWidgetArea, editHistoryDock_);
+    editHistoryDock_->hide();
+    editHistoryWidget_->applyAppearance(themeManager_->appearance());
+    applyEditHistoryDockAppearance(editHistoryDock_,
+                                   themeManager_->appearance(), false);
+    connect(themeManager_, &ThemeManager::appearanceChanged,
+            editHistoryWidget_, &EditHistoryWidget::applyAppearance);
+    connect(themeManager_, &ThemeManager::appearanceChanged,
+            this, [this](const Appearance& appearance) {
+                applyEditHistoryDockAppearance(
+                    editHistoryDock_, appearance,
+                    editHistoryDock_->isFloating());
+            });
+    connect(editHistoryDock_, &QDockWidget::topLevelChanged,
+            this, [this](bool floating) {
+                applyEditHistoryDockAppearance(
+                    editHistoryDock_, themeManager_->appearance(), floating);
+                editor_->refreshScrollBarLayout();
+                QTimer::singleShot(0, editor_,
+                                   &EditorWidget::refreshScrollBarLayout);
+            });
+    connect(editHistoryDock_, &QDockWidget::visibilityChanged,
+            this, [this](bool) {
+                editor_->refreshScrollBarLayout();
+                QTimer::singleShot(0, editor_,
+                                   &EditorWidget::refreshScrollBarLayout);
+            });
     windowController_ = new WindowController(this, this);
     windowController_->configureMinimalMode(editor_, findReplaceWidget_);
     connect(themeManager_, &ThemeManager::appearanceChanged,
@@ -328,6 +366,16 @@ void MainWindow::createMenus()
         savePersistentSettings();
     });
 
+    editHistoryAction_ = viewMenu->addAction(tr("Edit &History"));
+    editHistoryAction_->setObjectName(QStringLiteral("editHistoryAction"));
+    editHistoryAction_->setCheckable(true);
+    editHistoryAction_->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H));
+    connect(editHistoryAction_, &QAction::toggled,
+            editHistoryDock_, &QDockWidget::setVisible);
+    connect(editHistoryDock_, &QDockWidget::visibilityChanged,
+            editHistoryAction_, &QAction::setChecked);
+
     viewMenu->addSeparator();
     auto* alwaysOnTopAction = viewMenu->addAction(tr("Always on &Top"));
     alwaysOnTopAction->setObjectName(QStringLiteral("alwaysOnTopAction"));
@@ -372,6 +420,10 @@ void MainWindow::createMenus()
     connect(windowController_, &WindowController::minimalModeChanged,
             this, [this](bool enabled) {
                 framelessAction_->setEnabled(!enabled);
+                editHistoryAction_->setEnabled(!enabled);
+                if (enabled) {
+                    editHistoryDock_->hide();
+                }
                 if (!enabled) {
                     editor_->QWidget::setFocus();
                 }

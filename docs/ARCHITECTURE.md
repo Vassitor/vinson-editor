@@ -11,6 +11,7 @@ main
           -> WindowController (window flags and native move/resize requests)
           -> FindReplaceWidget (non-modal search controls)
               -> SearchController (search/replace orchestration)
+          -> EditHistoryWidget (undo-stack timeline and restoration)
           -> SettingsDialog (live appearance controls)
               -> ThemeManager (validated appearance state)
           -> EditorWidget (stable editor-facing API)
@@ -35,6 +36,12 @@ including forward/backward traversal and wrap-around, so neither the controller
 nor the find/replace widget copies the complete document. Replace All is grouped
 as one Scintilla undo action. `FindReplaceWidget` remains non-modal and returns
 focus to the editor when closed.
+
+`EditHistoryWidget` reads logical edit groups from Scintilla's native undo
+stack instead of retaining document snapshots. It shows initial, current, and
+saved states, and restores a selected state by replaying undo or redo groups.
+Opening or creating a document clears the underlying stack, so history always
+belongs to the active document.
 
 `ThemeManager` owns the current in-memory appearance, clamps font sizes, keeps
 caret and selection colors opaque, and applies independent background and
