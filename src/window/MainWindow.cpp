@@ -36,20 +36,39 @@
 #include <QSignalBlocker>
 #include <QScreen>
 #include <QStringList>
+#include <QTabBar>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QSizePolicy>
 
 #include <algorithm>
 #include <limits>
 #include <utility>
 
 namespace vinson {
+namespace {
+
+QColor blendedTabColor(const QColor& background, const QColor& foreground,
+                       int foregroundPercent)
+{
+    const int backgroundPercent = 100 - foregroundPercent;
+    return QColor(
+        (background.red() * backgroundPercent
+         + foreground.red() * foregroundPercent) / 100,
+        (background.green() * backgroundPercent
+         + foreground.green() * foregroundPercent) / 100,
+        (background.blue() * backgroundPercent
+         + foreground.blue() * foregroundPercent) / 100);
+}
+
+} // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , editor_(new EditorWidget(this))
+    , tabBar_(new QTabBar(this))
     , fileManager_(new FileManager(this))
     , searchController_(new SearchController(editor_, this))
     , findReplaceWidget_(new FindReplaceWidget(this))
@@ -69,9 +88,38 @@ MainWindow::MainWindow(QWidget* parent)
     auto* centralLayout = new QVBoxLayout(centralWidget);
     centralLayout->setContentsMargins(0, 0, 0, 0);
     centralLayout->setSpacing(0);
+    tabBar_->setObjectName(QStringLiteral("documentTabBar"));
+    tabBar_->setDocumentMode(true);
+    tabBar_->setDrawBase(false);
+    tabBar_->setExpanding(false);
+    tabBar_->setTabsClosable(true);
+    tabBar_->setMovable(true);
+    tabBar_->setElideMode(Qt::ElideMiddle);
+    tabBar_->setUsesScrollButtons(true);
+    tabBar_->setMinimumWidth(180);
+    tabBar_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    tabBar_->setProperty("browserStyle", true);
     centralLayout->addWidget(findReplaceWidget_);
     centralLayout->addWidget(editor_, 1);
     setCentralWidget(centralWidget);
+
+    TabState initialTab;
+    initialTab.documentHandle = editor_->retainCurrentDocument();
+    tabs_.push_back(std::move(initialTab));
+    currentTabIndex_ = 0;
+    const int initialTabIndex = tabBar_->addTab(tr("Untitled"));
+    tabBar_->setTabData(initialTabIndex,
+                        QVariant::fromValue(tabs_.front().documentHandle));
+    tabBar_->setCurrentIndex(0);
+    connect(tabBar_, &QTabBar::currentChanged,
+            this, [this](int index) { switchToTab(index); });
+    connect(tabBar_, &QTabBar::tabCloseRequested,
+            this, &MainWindow::requestCloseTab);
+    connect(tabBar_, &QTabBar::tabMoved, this,
+            [this](int, int) {
+                synchronizeTabOrder();
+                savePersistentSettings();
+            });
     editHistoryWidget_ = new EditHistoryWidget(editor_, this);
     editHistoryDock_ = new QDockWidget(tr("Edit History"), this);
     editHistoryDock_->setObjectName(QStringLiteral("editHistoryDock"));
@@ -81,6 +129,7 @@ MainWindow::MainWindow(QWidget* parent)
     editHistoryDock_->setMinimumWidth(240);
     addDockWidget(Qt::RightDockWidgetArea, editHistoryDock_);
     editHistoryDock_->hide();
+    findReplaceWidget_->applyAppearance(themeManager_->appearance(), false);
     editHistoryWidget_->applyAppearance(themeManager_->appearance());
     applyEditHistoryDockAppearance(editHistoryDock_,
                                    themeManager_->appearance(), false);
@@ -109,10 +158,25 @@ MainWindow::MainWindow(QWidget* parent)
     windowController_ = new WindowController(this, this);
     windowController_->configureMinimalMode(editor_, findReplaceWidget_);
     connect(themeManager_, &ThemeManager::appearanceChanged,
+            this, [this](const Appearance& appearance) {
+                findReplaceWidget_->applyAppearance(
+                    appearance, windowController_->isFrameless());
+            });
+    connect(themeManager_, &ThemeManager::appearanceChanged,
             windowController_, &WindowController::refreshMinimalMinimumSize);
     connect(windowController_, &WindowController::framelessChanged,
             themeManager_, &ThemeManager::setFramelessMode);
+    connect(windowController_, &WindowController::framelessChanged,
+            this, [this](bool frameless) {
+                findReplaceWidget_->applyAppearance(
+                    themeManager_->appearance(), frameless);
+                updateTabBarVisibility();
+            });
     createMenus();
+    menuBar()->setCornerWidget(tabBar_, Qt::TopRightCorner);
+    applyTabBarAppearance(themeManager_->appearance());
+    connect(themeManager_, &ThemeManager::appearanceChanged,
+            this, &MainWindow::applyTabBarAppearance);
     connectFileManager();
     connectSearch();
 
@@ -138,8 +202,8 @@ MainWindow::MainWindow(QWidget* parent)
             });
     connect(editor_, &EditorWidget::documentModified, this,
             [this](bool modified) {
-                if (!fileManager_->isBusy()) {
-                    document_.setModified(modified);
+                if (!fileManager_->isBusy() && !switchingTabs_) {
+                    currentTab().document.setModified(modified);
                     updateWindowTitle();
                 }
             });
@@ -156,6 +220,16 @@ MainWindow::MainWindow(QWidget* parent)
             this, [this] { showFindReplace(false); });
     connect(editor_, &EditorWidget::fontSizeAdjustmentRequested,
             this, &MainWindow::adjustFontSize);
+
+    QTimer::singleShot(0, this, &MainWindow::processPendingOpenFiles);
+}
+
+MainWindow::~MainWindow()
+{
+    for (const TabState& tab : tabs_) {
+        editor_->releaseTabDocument(
+            static_cast<sptr_t>(tab.documentHandle));
+    }
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -177,17 +251,10 @@ void MainWindow::closeEvent(QCloseEvent* event)
         event->ignore();
         return;
     }
-    if (!document_.isModified()) {
-        savePersistentSettings();
-        event->accept();
-        return;
-    }
-
     event->ignore();
-    requestAfterUnsavedCheck([this] {
-        closeAfterSave_ = true;
-        close();
-    });
+    if (!closeAllTabsInProgress_) {
+        beginCloseAllTabs(false);
+    }
 }
 
 void MainWindow::setCloseToTrayEnabled(bool enabled) noexcept
@@ -221,10 +288,7 @@ void MainWindow::requestApplicationQuit()
         return;
     }
 
-    requestAfterUnsavedCheck([this] {
-        savePersistentSettings();
-        emit applicationQuitAccepted();
-    });
+    beginCloseAllTabs(true);
 }
 
 void MainWindow::handleBossKeyRegistrationFailure(
@@ -270,12 +334,17 @@ void MainWindow::createMenus()
 {
     auto* fileMenu = menuBar()->addMenu(tr("&File"));
     newAction_ = fileMenu->addAction(tr("&New"));
+    newAction_->setObjectName(QStringLiteral("newDocumentAction"));
     newAction_->setShortcut(QKeySequence::New);
     connect(newAction_, &QAction::triggered, this, &MainWindow::newDocument);
 
     openAction_ = fileMenu->addAction(tr("&Open…"));
     openAction_->setShortcut(QKeySequence::Open);
     connect(openAction_, &QAction::triggered, this, &MainWindow::chooseAndOpenFile);
+
+    recentFilesMenu_ = fileMenu->addMenu(tr("Open &Recent"));
+    recentFilesMenu_->setObjectName(QStringLiteral("recentFilesMenu"));
+    rebuildRecentFilesMenu();
 
     saveAction_ = fileMenu->addAction(tr("&Save"));
     saveAction_->setShortcut(QKeySequence::Save);
@@ -348,10 +417,12 @@ void MainWindow::createMenus()
     connect(wrapAction_, &QAction::toggled, this, [this](bool enabled) {
         preferredWordWrap_ = enabled;
         editor_->setWordWrapEnabled(enabled);
-        if (enabled && LargeFilePolicy::usesLargeDocument(largeFileMode_)) {
+        if (enabled && LargeFilePolicy::usesLargeDocument(
+                           currentTab().largeFileMode)) {
             statusBar()->showMessage(
                 tr("Word wrap may be slow in %1.")
-                    .arg(LargeFilePolicy::displayName(largeFileMode_)),
+                    .arg(LargeFilePolicy::displayName(
+                        currentTab().largeFileMode)),
                 5000);
         }
         savePersistentSettings();
@@ -427,10 +498,32 @@ void MainWindow::createMenus()
                 if (!enabled) {
                     editor_->QWidget::setFocus();
                 }
+                updateTabBarVisibility();
             });
 
+    auto* previousTabAction = new QAction(this);
+    previousTabAction->setObjectName(QStringLiteral("previousTabAction"));
+    previousTabAction->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Left));
+    previousTabAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(previousTabAction);
+    connect(previousTabAction, &QAction::triggered,
+            this, [this] { switchRelativeTab(-1); });
+
+    auto* nextTabAction = new QAction(this);
+    nextTabAction->setObjectName(QStringLiteral("nextTabAction"));
+    nextTabAction->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_Right));
+    nextTabAction->setShortcutContext(Qt::WindowShortcut);
+    addAction(nextTabAction);
+    connect(nextTabAction, &QAction::triggered,
+            this, [this] { switchRelativeTab(1); });
+
     auto* settingsMenu = menuBar()->addMenu(tr("&Settings"));
-    auto* appearanceAction = settingsMenu->addAction(tr("&Appearance…"));
+    auto* appearanceAction = settingsMenu->addAction(
+        tr("&Appearance and Shortcuts…"));
+    appearanceAction->setObjectName(
+        QStringLiteral("appearanceAndShortcutsAction"));
     connect(appearanceAction, &QAction::triggered,
             this, &MainWindow::showSettings);
 
@@ -478,7 +571,7 @@ void MainWindow::connectSearch()
     connect(findReplaceWidget_, &FindReplaceWidget::replaceAllRequested,
             this, [this] {
                 if (LargeFilePolicy::requiresReplaceAllConfirmation(
-                        largeFileMode_)
+                        currentTab().largeFileMode)
                     && QMessageBox::warning(
                            this, tr("Replace All in a very large file"),
                            tr("Replace All may take a long time and create a "
@@ -529,7 +622,8 @@ void MainWindow::showGoToLine()
 void MainWindow::showSettings()
 {
     const Appearance original = themeManager_->appearance();
-    SettingsDialog dialog(original, bossKey_, focusShortcut_, this);
+    SettingsDialog dialog(original, bossKey_, focusShortcut_,
+                          restoreTabsOnStartup_, this);
     connect(&dialog, &SettingsDialog::previewChanged,
             themeManager_, &ThemeManager::applyAppearance);
     if (dialog.exec() != QDialog::Accepted) {
@@ -552,6 +646,7 @@ void MainWindow::showSettings()
             focusShortcut_ = dialog.focusShortcut();
             emit focusShortcutChanged(focusShortcut_);
         }
+        restoreTabsOnStartup_ = dialog.restoreTabsOnStartup();
         savePersistentSettings();
     }
 }
@@ -571,6 +666,7 @@ void MainWindow::connectFileManager()
                         tr("Scintilla could not create a document for this file."));
                     return;
                 }
+                replaceCurrentTabDocumentHandle();
                 loadReplacedDocument_ = true;
                 applyLargeFileMode(mode);
                 progressBar_->setRange(0, info.fileSize > 0 ? 1000 : 0);
@@ -585,11 +681,12 @@ void MainWindow::connectFileManager()
                     chunk, offset + chunk.size() >= editor_->documentLength());
             });
     connect(fileManager_, &FileManager::loadChunk, this,
-            [this](const QByteArray& data, qint64 bytesRead, qint64 totalBytes) {
+            [this](const QByteArray& chunkData, qint64 bytesRead,
+                   qint64 totalBytes) {
                 if (!loadReplacedDocument_) {
                     return;
                 }
-                editor_->appendTextUtf8(data);
+                editor_->appendTextUtf8(chunkData);
                 if (totalBytes > 0) {
                     progressBar_->setValue(static_cast<int>(
                         std::min<qint64>(1000, bytesRead * 1000 / totalBytes)));
@@ -602,13 +699,16 @@ void MainWindow::connectFileManager()
     connect(fileManager_, &FileManager::loadCompleted, this,
             [this](const FileLoadInfo& info) {
                 editor_->completeFileLoad(info.lineEnding);
-                document_.adoptLoadedFile(info);
+                currentTab().document.adoptLoadedFile(info);
                 lastDirectory_ = QFileInfo(info.path).absolutePath();
+                addRecentFile(info.path);
                 loadReplacedDocument_ = false;
+                loadingTabIndex_ = -1;
                 updateWindowTitle();
                 updateDocumentStatus();
                 statusBar()->showMessage(tr("Loaded %1").arg(info.path), 3000);
                 savePersistentSettings();
+                processPendingOpenFiles();
             });
     connect(fileManager_, &FileManager::saveProgress, this,
             [this](qint64 written, qint64 total) {
@@ -621,8 +721,13 @@ void MainWindow::connectFileManager()
     connect(fileManager_, &FileManager::saveCompleted, this,
             [this](const FileSaveResult& result) {
                 editor_->markSaved();
-                document_.adoptSavedFile(result);
+                currentTab().document.adoptSavedFile(result);
+                if (closeAllTabsInProgress_
+                    && !closingSessionPaths_.contains(result.path)) {
+                    closingSessionPaths_.append(result.path);
+                }
                 lastDirectory_ = QFileInfo(result.path).absolutePath();
+                addRecentFile(result.path);
                 updateWindowTitle();
                 updateDocumentStatus();
                 statusBar()->showMessage(tr("Saved %1").arg(result.path), 3000);
@@ -639,35 +744,461 @@ void MainWindow::connectFileManager()
                 handleLoadFailureState();
                 pendingAfterSave_ = {};
                 QMessageBox::critical(this, tr("File operation failed"), message);
+                processPendingOpenFiles();
             });
     connect(fileManager_, &FileManager::operationCanceled, this, [this] {
         handleLoadFailureState();
         pendingAfterSave_ = {};
         statusBar()->showMessage(tr("File operation canceled"), 3000);
+        processPendingOpenFiles();
     });
 }
 
 void MainWindow::newDocument()
 {
-    requestAfterUnsavedCheck([this] {
-        if (!editor_->resetDocument()) {
-            QMessageBox::critical(
-                this, tr("New document"),
-                tr("Scintilla could not create a new document."));
+    if (fileManager_->isBusy()) {
+        return;
+    }
+    if (addBlankTab() >= 0) {
+        statusBar()->showMessage(tr("New document"), 2000);
+    }
+}
+
+int MainWindow::addBlankTab(bool activate)
+{
+    const sptr_t document = editor_->createTabDocument();
+    if (document == 0) {
+        QMessageBox::critical(
+            this, tr("New document"),
+            tr("Scintilla could not create a new document."));
+        return -1;
+    }
+
+    TabState tab;
+    tab.documentHandle = document;
+    tabs_.push_back(std::move(tab));
+    const int index = static_cast<int>(tabs_.size()) - 1;
+    const int tabBarIndex = tabBar_->addTab(tr("Untitled"));
+    tabBar_->setTabData(tabBarIndex,
+                        QVariant::fromValue(tabs_.back().documentHandle));
+    if (activate) {
+        switchToTab(index);
+    }
+    savePersistentSettings();
+    return index;
+}
+
+void MainWindow::snapshotCurrentTabView()
+{
+    if (currentTabIndex_ < 0
+        || currentTabIndex_ >= static_cast<int>(tabs_.size())) {
+        return;
+    }
+    TabState& tab = tabs_.at(currentTabIndex_);
+    tab.caret = editor_->currentPos();
+    tab.anchor = editor_->anchor();
+    tab.firstVisibleLine = editor_->firstVisibleLine();
+    tab.horizontalOffset = editor_->xOffset();
+}
+
+void MainWindow::switchToTab(int index, bool force)
+{
+    if (index < 0 || index >= static_cast<int>(tabs_.size())
+        || fileManager_->isBusy()) {
+        const QSignalBlocker blocker(tabBar_);
+        tabBar_->setCurrentIndex(currentTabIndex_);
+        return;
+    }
+    synchronizeTabOrder();
+    if (!force && index == currentTabIndex_) {
+        return;
+    }
+
+    snapshotCurrentTabView();
+    switchingTabs_ = true;
+    currentTabIndex_ = index;
+    TabState& tab = currentTab();
+    editor_->activateTabDocument(
+        static_cast<sptr_t>(tab.documentHandle), tab.largeFileMode);
+    editor_->setSel(static_cast<sptr_t>(tab.anchor),
+                    static_cast<sptr_t>(tab.caret));
+    editor_->setFirstVisibleLine(
+        static_cast<sptr_t>(tab.firstVisibleLine));
+    editor_->setXOffset(static_cast<sptr_t>(tab.horizontalOffset));
+    applyLargeFileMode(tab.largeFileMode);
+    switchingTabs_ = false;
+
+    {
+        const QSignalBlocker blocker(tabBar_);
+        tabBar_->setCurrentIndex(index);
+    }
+    editHistoryWidget_->refresh();
+    currentLine_ = editor_->currentOneBasedLine();
+    cursorPositionLabel_->setText(
+        tr("Ln %1, Col %2")
+            .arg(currentLine_)
+            .arg(editor_->column(editor_->currentPos()) + 1));
+    updateWindowTitle();
+    updateDocumentStatus();
+    editor_->QWidget::setFocus(Qt::ShortcutFocusReason);
+}
+
+void MainWindow::synchronizeTabOrder()
+{
+    if (synchronizingTabOrder_
+        || tabBar_->count() != static_cast<int>(tabs_.size())) {
+        return;
+    }
+
+    bool orderChanged = false;
+    for (int index = 0; index < tabBar_->count(); ++index) {
+        if (tabBar_->tabData(index).value<qintptr>()
+            != tabs_.at(index).documentHandle) {
+            orderChanged = true;
+            break;
+        }
+    }
+    if (!orderChanged) {
+        return;
+    }
+
+    const qintptr activeDocument = currentTabIndex_ >= 0
+        && currentTabIndex_ < static_cast<int>(tabs_.size())
+        ? tabs_.at(currentTabIndex_).documentHandle : 0;
+    synchronizingTabOrder_ = true;
+    std::vector<TabState> reorderedTabs;
+    reorderedTabs.reserve(tabs_.size());
+    for (int index = 0; index < tabBar_->count(); ++index) {
+        const qintptr documentHandle =
+            tabBar_->tabData(index).value<qintptr>();
+        const auto found = std::find_if(
+            tabs_.begin(), tabs_.end(),
+            [documentHandle](const TabState& tab) {
+                return tab.documentHandle == documentHandle;
+            });
+        if (found == tabs_.end()) {
+            synchronizingTabOrder_ = false;
             return;
         }
+        reorderedTabs.push_back(std::move(*found));
+    }
+    tabs_ = std::move(reorderedTabs);
+    const auto active = std::find_if(
+        tabs_.cbegin(), tabs_.cend(),
+        [activeDocument](const TabState& tab) {
+            return tab.documentHandle == activeDocument;
+        });
+    currentTabIndex_ = active == tabs_.cend()
+        ? tabBar_->currentIndex()
+        : static_cast<int>(active - tabs_.cbegin());
+    synchronizingTabOrder_ = false;
+}
+
+void MainWindow::applyTabBarAppearance(const Appearance& appearance)
+{
+    QColor background = appearance.backgroundColor;
+    QColor text = appearance.textColor;
+    background.setAlpha(255);
+    text.setAlpha(255);
+    const QColor inactive = blendedTabColor(background, text, 7);
+    const QColor hover = blendedTabColor(background, text, 13);
+    const QColor border = blendedTabColor(background, text, 22);
+    tabBar_->setStyleSheet(QStringLiteral(R"(
+QTabBar#documentTabBar {
+    background: transparent;
+    border: none;
+}
+QTabBar#documentTabBar::tab {
+    min-width: 104px;
+    max-width: 220px;
+    min-height: 25px;
+    margin: 3px 1px 0 0;
+    padding: 2px 9px;
+    background: %1;
+    color: %2;
+    border: 1px solid %4;
+    border-bottom: none;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}
+QTabBar#documentTabBar::tab:hover:!selected { background: %3; }
+QTabBar#documentTabBar::tab:selected {
+    background: %5;
+    border-color: %4;
+}
+QTabBar#documentTabBar::close-button {
+    width: 16px;
+    height: 16px;
+    margin-left: 5px;
+}
+)")
+        .arg(inactive.name(QColor::HexRgb), text.name(QColor::HexRgb),
+             hover.name(QColor::HexRgb), border.name(QColor::HexRgb),
+             background.name(QColor::HexRgb)));
+}
+
+void MainWindow::switchRelativeTab(int delta)
+{
+    if (tabs_.size() < 2 || fileManager_->isBusy()) {
+        return;
+    }
+    const int count = static_cast<int>(tabs_.size());
+    switchToTab((currentTabIndex_ + delta + count) % count);
+}
+
+void MainWindow::requestCloseTab(int index)
+{
+    if (fileManager_->isBusy() || index < 0
+        || index >= static_cast<int>(tabs_.size())) {
+        return;
+    }
+    switchToTab(index);
+    const qintptr documentHandle = currentTab().documentHandle;
+    requestAfterUnsavedCheck([this, documentHandle] {
+        const auto found = std::find_if(
+            tabs_.cbegin(), tabs_.cend(), [documentHandle](const TabState& tab) {
+                return tab.documentHandle == documentHandle;
+            });
+        if (found != tabs_.cend()) {
+            closeTab(static_cast<int>(found - tabs_.cbegin()));
+        }
+    });
+}
+
+void MainWindow::closeTab(int index)
+{
+    if (index < 0 || index >= static_cast<int>(tabs_.size())) {
+        return;
+    }
+    if (tabs_.size() == 1) {
+        const sptr_t oldDocument = static_cast<sptr_t>(
+            tabs_.front().documentHandle);
+        if (!editor_->resetDocument()) {
+            return;
+        }
+        editor_->releaseTabDocument(oldDocument);
+        tabs_.front() = TabState{};
+        tabs_.front().documentHandle = editor_->retainCurrentDocument();
         applyLargeFileMode(LargeFileMode::Normal);
-        document_.reset();
         updateWindowTitle();
         updateDocumentStatus();
-        statusBar()->showMessage(tr("New document"), 2000);
-    });
+        return;
+    }
+
+    const sptr_t removedDocument = static_cast<sptr_t>(
+        tabs_.at(index).documentHandle);
+    const bool removingCurrent = index == currentTabIndex_;
+    tabs_.erase(tabs_.begin() + index);
+    {
+        const QSignalBlocker blocker(tabBar_);
+        tabBar_->removeTab(index);
+    }
+    if (removingCurrent) {
+        currentTabIndex_ = -1;
+        switchToTab(std::min(index, static_cast<int>(tabs_.size()) - 1), true);
+    } else if (index < currentTabIndex_) {
+        --currentTabIndex_;
+        const QSignalBlocker blocker(tabBar_);
+        tabBar_->setCurrentIndex(currentTabIndex_);
+    }
+    editor_->releaseTabDocument(removedDocument);
+    savePersistentSettings();
+}
+
+void MainWindow::beginCloseAllTabs(bool quitApplication)
+{
+    if (fileManager_->isBusy() || closeAllTabsInProgress_) {
+        return;
+    }
+    snapshotCurrentTabView();
+    closingSessionPaths_ = sessionTabPaths();
+    closeAllTabsInProgress_ = true;
+    quitAfterClosingTabs_ = quitApplication;
+    continueCloseAllTabs();
+}
+
+void MainWindow::continueCloseAllTabs()
+{
+    if (!closeAllTabsInProgress_ || fileManager_->isBusy()) {
+        return;
+    }
+    if (tabs_.size() > 1) {
+        switchToTab(0);
+        requestAfterUnsavedCheck([this] {
+            closeTab(0);
+            QTimer::singleShot(0, this, &MainWindow::continueCloseAllTabs);
+        });
+        return;
+    }
+    if (currentTab().document.isModified()) {
+        requestAfterUnsavedCheck([this] {
+            closeTab(0);
+            QTimer::singleShot(0, this, &MainWindow::continueCloseAllTabs);
+        });
+        return;
+    }
+
+    savePersistentSettings();
+    closeAllTabsInProgress_ = false;
+    if (quitAfterClosingTabs_) {
+        quitAfterClosingTabs_ = false;
+        emit applicationQuitAccepted();
+    } else {
+        closeAfterSave_ = true;
+        close();
+    }
+}
+
+void MainWindow::updateTabBarVisibility()
+{
+    tabBar_->setVisible(!windowController_->isFrameless()
+                        && !windowController_->isMinimalMode());
+}
+
+void MainWindow::updateTabTitle(int index)
+{
+    if (index < 0 || index >= static_cast<int>(tabs_.size())) {
+        return;
+    }
+    const TabState& tab = tabs_.at(index);
+    const QString marker = tab.document.isModified()
+        ? QStringLiteral("*") : QString();
+    const QString displayName = tab.document.isUntitled()
+        ? tr("Untitled") : tab.document.displayName();
+    tabBar_->setTabText(index, marker + displayName);
+    tabBar_->setTabToolTip(index, tab.document.path().isEmpty()
+        ? tr("Untitled") : QDir::toNativeSeparators(tab.document.path()));
+}
+
+MainWindow::TabState& MainWindow::currentTab()
+{
+    return tabs_.at(currentTabIndex_);
+}
+
+const MainWindow::TabState& MainWindow::currentTab() const
+{
+    return tabs_.at(currentTabIndex_);
+}
+
+bool MainWindow::currentTabIsPristineUntitled() const
+{
+    return currentTab().document.isUntitled()
+        && !currentTab().document.isModified()
+        && editor_->isEmpty()
+        && editor_->editHistory().isEmpty();
+}
+
+int MainWindow::tabIndexForPath(const QString& path) const
+{
+    const QString absolutePath = QDir::cleanPath(
+        QFileInfo(path).absoluteFilePath());
+#ifdef Q_OS_WIN
+    constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseInsensitive;
+#else
+    constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseSensitive;
+#endif
+    for (int index = 0; index < static_cast<int>(tabs_.size()); ++index) {
+        if (tabs_.at(index).document.path().compare(
+                absolutePath, pathCaseSensitivity) == 0) {
+            return index;
+        }
+    }
+    return -1;
+}
+
+QStringList MainWindow::sessionTabPaths() const
+{
+    if (closeAllTabsInProgress_ && !closingSessionPaths_.isEmpty()) {
+        return closingSessionPaths_;
+    }
+    QStringList paths;
+    for (const TabState& tab : tabs_) {
+        if (!tab.document.isUntitled()) {
+            paths.append(tab.document.path());
+        }
+    }
+    return paths;
+}
+
+void MainWindow::replaceCurrentTabDocumentHandle()
+{
+    const sptr_t oldDocument = static_cast<sptr_t>(
+        currentTab().documentHandle);
+    currentTab().documentHandle = editor_->retainCurrentDocument();
+    tabBar_->setTabData(currentTabIndex_,
+                        QVariant::fromValue(currentTab().documentHandle));
+    editor_->releaseTabDocument(oldDocument);
+}
+
+void MainWindow::openFiles(const QStringList& paths)
+{
+    for (const QString& path : paths) {
+        if (!path.trimmed().isEmpty()) {
+            pendingOpenPaths_.append(QDir::cleanPath(
+                QFileInfo(path).absoluteFilePath()));
+        }
+    }
+    processPendingOpenFiles();
+}
+
+void MainWindow::handleExternalOpenRequest(const QStringList& paths)
+{
+    if (isMinimized()) {
+        showNormal();
+    } else {
+        show();
+    }
+    raise();
+    activateWindow();
+    if (paths.isEmpty()) {
+        if (fileManager_->isBusy()) {
+            ++pendingNewTabs_;
+        } else {
+            newDocument();
+        }
+    } else {
+        openFiles(paths);
+    }
+}
+
+void MainWindow::processPendingOpenFiles()
+{
+    if (fileManager_->isBusy()) {
+        return;
+    }
+    if (pendingNewTabs_ > 0) {
+        --pendingNewTabs_;
+        addBlankTab();
+        QTimer::singleShot(0, this, &MainWindow::processPendingOpenFiles);
+        return;
+    }
+    if (pendingOpenPaths_.isEmpty()) {
+        return;
+    }
+
+    const QString path = pendingOpenPaths_.takeFirst();
+    const int existingTab = tabIndexForPath(path);
+    if (existingTab >= 0) {
+        switchToTab(existingTab);
+        QTimer::singleShot(0, this, &MainWindow::processPendingOpenFiles);
+        return;
+    }
+    if (!currentTabIsPristineUntitled() && addBlankTab() < 0) {
+        return;
+    }
+    loadingTabIndex_ = currentTabIndex_;
+    if (!fileManager_->openFile(path)) {
+        loadingTabIndex_ = -1;
+        QMessageBox::warning(this, tr("Open file"),
+                             tr("Another file operation is in progress."));
+    }
 }
 
 void MainWindow::chooseAndOpenFile()
 {
-    const QString initialDirectory = document_.isUntitled()
-        ? lastDirectory_ : QFileInfo(document_.path()).absolutePath();
+    const QString initialDirectory = currentTab().document.isUntitled()
+        ? lastDirectory_
+        : QFileInfo(currentTab().document.path()).absolutePath();
     const QString path = QFileDialog::getOpenFileName(
         this, tr("Open Text File"), initialDirectory,
         tr("Text files (*);;All files (*)"));
@@ -678,18 +1209,96 @@ void MainWindow::chooseAndOpenFile()
 
 void MainWindow::requestOpenFile(const QString& path)
 {
-    requestAfterUnsavedCheck([this, path] {
-        if (!fileManager_->openFile(path)) {
-            QMessageBox::warning(this, tr("Open file"),
-                                 tr("Another file operation is in progress."));
+    openFiles({path});
+}
+
+void MainWindow::addRecentFile(const QString& path)
+{
+    const QString absolutePath = QDir::cleanPath(
+        QFileInfo(path).absoluteFilePath());
+#ifdef Q_OS_WIN
+    constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseInsensitive;
+#else
+    constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseSensitive;
+#endif
+    recentFiles_.removeIf([&absolutePath](const QString& recentPath) {
+        return recentPath.compare(absolutePath, pathCaseSensitivity) == 0;
+    });
+    recentFiles_.prepend(absolutePath);
+    if (recentFiles_.size() > maximumRecentFiles) {
+        recentFiles_.resize(maximumRecentFiles);
+    }
+    rebuildRecentFilesMenu();
+}
+
+void MainWindow::removeRecentFile(const QString& path)
+{
+#ifdef Q_OS_WIN
+    constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseInsensitive;
+#else
+    constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseSensitive;
+#endif
+    recentFiles_.removeIf([&path](const QString& recentPath) {
+        return recentPath.compare(path, pathCaseSensitivity) == 0;
+    });
+    rebuildRecentFilesMenu();
+}
+
+void MainWindow::rebuildRecentFilesMenu()
+{
+    if (recentFilesMenu_ == nullptr) {
+        return;
+    }
+
+    recentFilesMenu_->clear();
+    if (recentFiles_.isEmpty()) {
+        auto* emptyAction = recentFilesMenu_->addAction(tr("No Recent Files"));
+        emptyAction->setEnabled(false);
+        recentFilesMenu_->setEnabled(false);
+        return;
+    }
+
+    recentFilesMenu_->setEnabled(!fileManager_->isBusy());
+    for (qsizetype index = 0; index < recentFiles_.size(); ++index) {
+        const QString& path = recentFiles_.at(index);
+        QString label = QDir::toNativeSeparators(path);
+        label.replace(QLatin1Char('&'), QStringLiteral("&&"));
+        if (index < 9) {
+            label.prepend(QStringLiteral("&%1 ").arg(index + 1));
+        } else {
+            label.prepend(QStringLiteral("%1 ").arg(index + 1));
         }
+        auto* action = recentFilesMenu_->addAction(label);
+        action->setData(path);
+        action->setToolTip(QDir::toNativeSeparators(path));
+        connect(action, &QAction::triggered, this, [this, path] {
+            if (!QFileInfo::exists(path)) {
+                removeRecentFile(path);
+                savePersistentSettings();
+                QMessageBox::warning(
+                    this, tr("Open recent file"),
+                    tr("The file no longer exists and was removed from the "
+                       "recent files list.\n%1").arg(path));
+                return;
+            }
+            requestOpenFile(path);
+        });
+    }
+
+    recentFilesMenu_->addSeparator();
+    auto* clearAction = recentFilesMenu_->addAction(tr("&Clear Recent Files"));
+    clearAction->setObjectName(QStringLiteral("clearRecentFilesAction"));
+    connect(clearAction, &QAction::triggered, this, [this] {
+        recentFiles_.clear();
+        rebuildRecentFilesMenu();
+        savePersistentSettings();
     });
 }
 
 bool MainWindow::saveDocument()
 {
-    return document_.isUntitled() ? saveDocumentAs()
-                                  : startSave(document_.path());
+    return currentTab().document.isUntitled()
+        ? saveDocumentAs() : startSave(currentTab().document.path());
 }
 
 bool MainWindow::saveDocumentAs()
@@ -700,11 +1309,12 @@ bool MainWindow::saveDocumentAs()
 
 bool MainWindow::startSave(const QString& path)
 {
-    const bool started = LargeFilePolicy::usesLargeDocument(largeFileMode_)
-        ? fileManager_->saveFileStreaming(path, document_.encoding(),
+    const bool started = LargeFilePolicy::usesLargeDocument(
+                             currentTab().largeFileMode)
+        ? fileManager_->saveFileStreaming(path, currentTab().document.encoding(),
                                           editor_->documentLength())
         : fileManager_->saveFile(path, editor_->textUtf8(),
-                                 document_.encoding());
+                                 currentTab().document.encoding());
     if (!started) {
         QMessageBox::warning(this, tr("Save file"),
                              tr("Another file operation is in progress."));
@@ -716,8 +1326,9 @@ bool MainWindow::startSave(const QString& path)
 
 void MainWindow::reloadDocument()
 {
-    if (!document_.isUntitled()) {
-        requestAfterUnsavedCheck([this, path = document_.path()] {
+    if (!currentTab().document.isUntitled()) {
+        requestAfterUnsavedCheck(
+            [this, path = currentTab().document.path()] {
             fileManager_->openFile(path);
         });
     }
@@ -728,14 +1339,15 @@ void MainWindow::requestAfterUnsavedCheck(std::function<void()> action)
     if (fileManager_->isBusy()) {
         return;
     }
-    if (!document_.isModified()) {
+    if (!currentTab().document.isModified()) {
         action();
         return;
     }
 
     const auto choice = QMessageBox::warning(
         this, tr("Unsaved changes"),
-        tr("Save changes to %1?").arg(document_.displayName()),
+        tr("Save changes to %1?").arg(currentTab().document.isUntitled()
+            ? tr("Untitled") : currentTab().document.displayName()),
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
         QMessageBox::Save);
     if (choice == QMessageBox::Discard) {
@@ -744,34 +1356,49 @@ void MainWindow::requestAfterUnsavedCheck(std::function<void()> action)
         pendingAfterSave_ = std::move(action);
         if (!saveDocument()) {
             pendingAfterSave_ = {};
+            if (closeAllTabsInProgress_) {
+                closeAllTabsInProgress_ = false;
+                quitAfterClosingTabs_ = false;
+                closingSessionPaths_.clear();
+            }
         }
+    } else if (closeAllTabsInProgress_) {
+        closeAllTabsInProgress_ = false;
+        quitAfterClosingTabs_ = false;
+        closingSessionPaths_.clear();
     }
 }
 
 void MainWindow::updateWindowTitle()
 {
-    const QString marker = document_.isModified() ? QStringLiteral("*")
-                                                   : QString();
+    updateTabTitle(currentTabIndex_);
+    const QString marker = currentTab().document.isModified()
+        ? QStringLiteral("*") : QString();
+    const QString displayName = currentTab().document.isUntitled()
+        ? tr("Untitled") : currentTab().document.displayName();
     setWindowTitle(QStringLiteral("%1%2 — Vinson Editor")
-                       .arg(marker, document_.displayName()));
+                       .arg(marker, displayName));
 }
 
 void MainWindow::updateDocumentStatus()
 {
-    QStringList fields{encodingName(document_.encoding()),
-                       lineEndingName(document_.lineEnding()),
-                       QLocale().formattedDataSize(document_.fileSize())};
-    const QString modeName = LargeFilePolicy::displayName(largeFileMode_);
+    QStringList fields{encodingName(currentTab().document.encoding()),
+                       lineEndingName(currentTab().document.lineEnding()),
+                       QLocale().formattedDataSize(
+                           currentTab().document.fileSize())};
+    const QString modeName = LargeFilePolicy::displayName(
+        currentTab().largeFileMode);
     if (!modeName.isEmpty()) {
         fields.append(modeName);
     }
     documentInfoLabel_->setText(fields.join(QStringLiteral(" | ")));
-    reloadAction_->setEnabled(!document_.isUntitled() && !fileManager_->isBusy());
+    reloadAction_->setEnabled(!currentTab().document.isUntitled()
+                              && !fileManager_->isBusy());
 }
 
 void MainWindow::applyLargeFileMode(LargeFileMode mode)
 {
-    largeFileMode_ = mode;
+    currentTab().largeFileMode = mode;
     const bool wrapEnabled = LargeFilePolicy::defaultsWordWrapOff(mode)
         ? false : preferredWordWrap_;
     {
@@ -787,6 +1414,16 @@ void MainWindow::restorePersistentSettings()
     restoringSettings_ = true;
     const ApplicationSettings settings = settingsManager_->load();
     lastDirectory_ = settings.lastDirectory;
+    recentFiles_ = settings.recentFiles;
+    restoreTabsOnStartup_ = settings.restoreTabsOnStartup;
+    if (restoreTabsOnStartup_) {
+        for (const QString& path : settings.openTabs) {
+            if (QFileInfo::exists(path)) {
+                pendingOpenPaths_.append(path);
+            }
+        }
+    }
+    rebuildRecentFilesMenu();
     themeManager_->applyAppearance(settings.appearance);
     preferredWordWrap_ = settings.wordWrap;
     {
@@ -806,6 +1443,7 @@ void MainWindow::restorePersistentSettings()
     }
     ensureWindowOnScreen();
     restoringSettings_ = false;
+    updateTabBarVisibility();
 }
 
 void MainWindow::savePersistentSettings()
@@ -814,17 +1452,19 @@ void MainWindow::savePersistentSettings()
         || wrapAction_ == nullptr || lineNumberAction_ == nullptr) {
         return;
     }
-    const ApplicationSettings settings{
-        themeManager_->appearance(),
-        windowController_->persistableGeometry(),
-        lastDirectory_,
-        preferredWordWrap_,
-        lineNumberAction_->isChecked(),
-        windowController_->isAlwaysOnTop(),
-        windowController_->persistableFrameless(),
-        bossKey_,
-        focusShortcut_,
-    };
+    ApplicationSettings settings;
+    settings.appearance = themeManager_->appearance();
+    settings.windowGeometry = windowController_->persistableGeometry();
+    settings.lastDirectory = lastDirectory_;
+    settings.recentFiles = recentFiles_;
+    settings.openTabs = sessionTabPaths();
+    settings.restoreTabsOnStartup = restoreTabsOnStartup_;
+    settings.wordWrap = preferredWordWrap_;
+    settings.lineNumbers = lineNumberAction_->isChecked();
+    settings.alwaysOnTop = windowController_->isAlwaysOnTop();
+    settings.frameless = windowController_->persistableFrameless();
+    settings.bossKey = bossKey_;
+    settings.focusShortcut = focusShortcut_;
     if (!settingsManager_->save(settings)) {
         qWarning() << "Could not persist settings to"
                    << settingsManager_->fileName();
@@ -897,15 +1537,17 @@ void MainWindow::updateBusyUi()
     const bool busy = fileManager_->isBusy();
     newAction_->setEnabled(!busy);
     openAction_->setEnabled(!busy);
+    recentFilesMenu_->setEnabled(!busy && !recentFiles_.isEmpty());
     saveAction_->setEnabled(!busy);
     saveAsAction_->setEnabled(!busy);
-    reloadAction_->setEnabled(!busy && !document_.isUntitled());
+    reloadAction_->setEnabled(!busy && !currentTab().document.isUntitled());
     findAction_->setEnabled(!busy);
     replaceAction_->setEnabled(!busy);
     findNextAction_->setEnabled(!busy);
     findPreviousAction_->setEnabled(!busy);
     goToLineAction_->setEnabled(!busy);
     findReplaceWidget_->setEnabled(!busy);
+    tabBar_->setEnabled(!busy);
     progressBar_->setVisible(busy);
     cancelOperationButton_->setVisible(busy);
     if (fileManager_->operation() == FileManager::Operation::Saving) {
@@ -923,18 +1565,19 @@ void MainWindow::handleLoadFailureState()
         return;
     }
     editor_->completeFileLoad(LineEnding::None);
-    document_.reset();
-    document_.setModified(!editor_->isEmpty());
+    currentTab().document.reset();
+    currentTab().document.setModified(!editor_->isEmpty());
     loadReplacedDocument_ = false;
+    loadingTabIndex_ = -1;
     updateWindowTitle();
     updateDocumentStatus();
 }
 
 QString MainWindow::chooseSavePath()
 {
-    const QString suggested = document_.isUntitled()
+    const QString suggested = currentTab().document.isUntitled()
         ? QDir(lastDirectory_).filePath(QStringLiteral("Untitled.txt"))
-        : document_.path();
+        : currentTab().document.path();
     return QFileDialog::getSaveFileName(
         this, tr("Save Text File"), suggested,
         tr("Text files (*.txt);;All files (*)"));

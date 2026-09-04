@@ -110,7 +110,7 @@ EditHistoryWidget::EditHistoryWidget(EditorWidget* editor, QWidget* parent)
     restoreButton_->setMinimumHeight(42);
     list_->setAlternatingRowColors(false);
     list_->setSelectionMode(QAbstractItemView::SingleSelection);
-    list_->setSpacing(2);
+    list_->setSpacing(0);
     list_->setWordWrap(true);
     list_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     emptyLabel_->setAlignment(Qt::AlignCenter);
@@ -174,25 +174,24 @@ QListWidget#editHistoryList {
     background: %7;
     border: none;
     outline: none;
-    padding: 2px;
+    padding: 3px 2px;
 }
 QWidget#editHistoryListViewport {
     background: %7;
 }
 QListWidget#editHistoryList::item {
-    border: 1px solid transparent;
-    border-radius: 7px;
+    border: none;
+    border-radius: 4px;
     color: %1;
-    margin: 1px 0;
-    padding: 9px 10px;
+    margin: 1px 2px;
+    padding: 7px 10px;
 }
 QListWidget#editHistoryList::item:hover {
     background: %3;
-    border-color: %4;
 }
 QListWidget#editHistoryList::item:selected {
     background: %5;
-    border: 1px solid %6;
+    border: none;
     color: %1;
 }
 QPushButton#editHistoryRestoreButton {
@@ -342,6 +341,8 @@ void applyEditHistoryDockAppearance(QDockWidget* dock,
     const QString outerBorder = floating
         ? QStringLiteral("none")
         : QStringLiteral("1px solid %1").arg(vinson::colorName(border));
+
+    dock->setTitleBarWidget(nullptr);
 
     dock->setProperty("historyFloating", floating);
     dock->setProperty("historyBorderColor", border);

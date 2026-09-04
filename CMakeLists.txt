@@ -110,6 +110,21 @@ if(Qt6LinguistTools_FOUND)
         MERGE_QT_TRANSLATIONS
         QT_TRANSLATION_CATALOGS qtbase)
     set(VINSON_TRANSLATIONS_ENABLED ON)
+
+    set(vinson_qtbase_zh_cn_qm
+        "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_TRANSLATIONS}/qtbase_zh_CN.qm")
+    if(EXISTS "${vinson_qtbase_zh_cn_qm}")
+        get_filename_component(vinson_qt_translations_dir
+            "${vinson_qtbase_zh_cn_qm}" DIRECTORY)
+        qt_add_resources(vinson_editor_ui vinson_qtbase_zh_cn_translations
+            PREFIX "/i18n/qt"
+            BASE "${vinson_qt_translations_dir}"
+            FILES "${vinson_qtbase_zh_cn_qm}")
+    else()
+        message(WARNING
+            "Qt Simplified Chinese translations were not found; standard "
+            "dialog buttons will use the platform fallback language.")
+    endif()
 else()
     message(WARNING
         "Qt LinguistTools was not found; bundled translations are disabled.")
@@ -119,6 +134,8 @@ add_executable(vinson-editor
     src/main.cpp
     src/app/Application.cpp
     src/app/Application.h
+    src/app/SingleInstance.cpp
+    src/app/SingleInstance.h
     resources/resources.qrc
 )
 

@@ -5,6 +5,7 @@
 #include "window/WindowController.h"
 
 #include <QAction>
+#include <QFile>
 #include <QGuiApplication>
 #include <QDockWidget>
 #include <QMainWindow>
@@ -14,6 +15,7 @@
 #include <QScreen>
 #include <QSettings>
 #include <QStatusBar>
+#include <QTabBar>
 #include <QTemporaryDir>
 #include <QWheelEvent>
 #include <QtTest>
@@ -33,6 +35,12 @@ private slots:
     void backgroundOpacityShortcutsArePersistent();
     void controlWheelFontSizeIsPersistent();
     void focusRequestTargetsEditor();
+    void restoresAndClearsRecentFiles();
+    void opensFilesInTabsAndReusesPristinePage();
+    void switchesTabsWithControlAltArrows();
+    void reordersTabsWithinTopBar();
+    void showsTabBarOnlyInDefaultMode();
+    void restoresOpenTabsWhenEnabled();
     void titleBarMenusUseNativeShadows();
     void exposesEditHistoryPanel();
     void closeToTrayPreservesUnsavedDocument();
@@ -288,6 +296,213 @@ void MainWindowPersistenceTest::focusRequestTargetsEditor()
     QTRY_VERIFY(editor->hasFocus());
 }
 
+void MainWindowPersistenceTest::restoresAndClearsRecentFiles()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+    const QString firstPath = directory.filePath(QStringLiteral("first.txt"));
+    const QString secondPath = directory.filePath(QStringLiteral("second.txt"));
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("files/recentFiles"),
+                          QStringList{firstPath, secondPath});
+        settings.sync();
+    }
+
+    vinson::MainWindow window;
+    auto* recentMenu = window.findChild<QMenu*>(
+        QStringLiteral("recentFilesMenu"));
+    QVERIFY(recentMenu != nullptr);
+    QVERIFY(recentMenu->isEnabled());
+    QCOMPARE(recentMenu->actions().size(), 4);
+    QCOMPARE(recentMenu->actions().at(0)->data().toString(), firstPath);
+    QCOMPARE(recentMenu->actions().at(1)->data().toString(), secondPath);
+    QVERIFY(recentMenu->actions().at(2)->isSeparator());
+
+    auto* clearAction = window.findChild<QAction*>(
+        QStringLiteral("clearRecentFilesAction"));
+    QVERIFY(clearAction != nullptr);
+    clearAction->trigger();
+
+    QVERIFY(!recentMenu->isEnabled());
+    QCOMPARE(recentMenu->actions().size(), 1);
+    QVERIFY(!recentMenu->actions().first()->isEnabled());
+    QSettings settings;
+    QVERIFY(settings.value(QStringLiteral("files/recentFiles"))
+                .toStringList().isEmpty());
+}
+
+void MainWindowPersistenceTest::opensFilesInTabsAndReusesPristinePage()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+    const QString firstPath = directory.filePath(QStringLiteral("first.txt"));
+    const QString secondPath = directory.filePath(QStringLiteral("second.txt"));
+    {
+        QFile first(firstPath);
+        QVERIFY(first.open(QIODevice::WriteOnly));
+        QCOMPARE(first.write("first tab"), qint64(9));
+        QFile second(secondPath);
+        QVERIFY(second.open(QIODevice::WriteOnly));
+        QCOMPARE(second.write("second tab"), qint64(10));
+    }
+
+    vinson::MainWindow window;
+    auto* tabs = window.findChild<QTabBar*>(QStringLiteral("documentTabBar"));
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    QVERIFY(tabs != nullptr);
+    QVERIFY(editor != nullptr);
+    QCOMPARE(tabs->count(), 1);
+
+    window.openFiles({firstPath});
+    QTRY_COMPARE_WITH_TIMEOUT(editor->textUtf8(), QByteArray("first tab"), 5000);
+    QCOMPARE(tabs->count(), 1);
+    QCOMPARE(tabs->tabText(0), QStringLiteral("first.txt"));
+
+    window.openFiles({secondPath});
+    QTRY_COMPARE_WITH_TIMEOUT(editor->textUtf8(), QByteArray("second tab"), 5000);
+    QCOMPARE(tabs->count(), 2);
+    QCOMPARE(tabs->tabText(1), QStringLiteral("second.txt"));
+
+    tabs->setCurrentIndex(0);
+    QCOMPARE(editor->textUtf8(), QByteArray("first tab"));
+}
+
+void MainWindowPersistenceTest::switchesTabsWithControlAltArrows()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* tabs = window.findChild<QTabBar*>(QStringLiteral("documentTabBar"));
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    auto* next = window.findChild<QAction*>(QStringLiteral("nextTabAction"));
+    auto* previous = window.findChild<QAction*>(
+        QStringLiteral("previousTabAction"));
+    QVERIFY(tabs != nullptr);
+    QVERIFY(editor != nullptr);
+    QVERIFY(next != nullptr);
+    QVERIFY(previous != nullptr);
+    QCOMPARE(next->shortcut(), QKeySequence(QStringLiteral("Ctrl+Alt+Right")));
+    QCOMPARE(previous->shortcut(),
+             QKeySequence(QStringLiteral("Ctrl+Alt+Left")));
+
+    editor->setTextUtf8("first");
+    window.handleExternalOpenRequest({});
+    editor->setTextUtf8("second");
+    QCOMPARE(tabs->count(), 2);
+
+    previous->trigger();
+    QCOMPARE(editor->textUtf8(), QByteArray("first"));
+    next->trigger();
+    QCOMPARE(editor->textUtf8(), QByteArray("second"));
+}
+
+void MainWindowPersistenceTest::reordersTabsWithinTopBar()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* tabs = window.findChild<QTabBar*>(QStringLiteral("documentTabBar"));
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    QVERIFY(tabs != nullptr);
+    QVERIFY(editor != nullptr);
+    QVERIFY(tabs->isMovable());
+    QCOMPARE(window.menuBar()->cornerWidget(Qt::TopRightCorner), tabs);
+    QVERIFY(tabs->property("browserStyle").toBool());
+
+    editor->setTextUtf8("first");
+    window.handleExternalOpenRequest({});
+    editor->setTextUtf8("second");
+    window.handleExternalOpenRequest({});
+    editor->setTextUtf8("third");
+    QCOMPARE(tabs->count(), 3);
+
+    tabs->setCurrentIndex(0);
+    QCOMPARE(editor->textUtf8(), QByteArray("first"));
+    tabs->moveTab(0, 2);
+    QCOMPARE(editor->textUtf8(), QByteArray("first"));
+    QCOMPARE(tabs->currentIndex(), 2);
+    tabs->setCurrentIndex(0);
+    QCOMPARE(editor->textUtf8(), QByteArray("second"));
+    tabs->setCurrentIndex(1);
+    QCOMPARE(editor->textUtf8(), QByteArray("third"));
+}
+
+void MainWindowPersistenceTest::showsTabBarOnlyInDefaultMode()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+
+    vinson::MainWindow window;
+    auto* tabs = window.findChild<QTabBar*>(QStringLiteral("documentTabBar"));
+    auto* controller = window.findChild<vinson::WindowController*>();
+    QVERIFY(tabs != nullptr);
+    QVERIFY(controller != nullptr);
+    window.show();
+    QTRY_VERIFY(tabs->isVisible());
+
+    controller->setFrameless(true);
+    QVERIFY(!tabs->isVisible());
+    controller->setFrameless(false);
+    QTRY_VERIFY(tabs->isVisible());
+    controller->setMinimalMode(true);
+    QVERIFY(!tabs->isVisible());
+    controller->setMinimalMode(false);
+    QTRY_VERIFY(tabs->isVisible());
+}
+
+void MainWindowPersistenceTest::restoresOpenTabsWhenEnabled()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+    const QString firstPath = directory.filePath(QStringLiteral("first.txt"));
+    const QString secondPath = directory.filePath(QStringLiteral("second.txt"));
+    for (const QString& path : {firstPath, secondPath}) {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QVERIFY(file.write(QFileInfo(path).baseName().toUtf8()) > 0);
+    }
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("session/restoreTabsOnStartup"), true);
+        settings.setValue(QStringLiteral("session/openTabs"),
+                          QStringList{firstPath, secondPath});
+        settings.sync();
+    }
+
+    vinson::MainWindow restored;
+    auto* restoredTabs = restored.findChild<QTabBar*>(
+        QStringLiteral("documentTabBar"));
+    QVERIFY(restoredTabs != nullptr);
+    QTRY_COMPARE_WITH_TIMEOUT(restoredTabs->count(), 2, 8000);
+    QTRY_COMPARE_WITH_TIMEOUT(restoredTabs->tabText(1),
+                              QStringLiteral("second.txt"), 8000);
+
+    useSettingsDirectory(directory.path());
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("session/restoreTabsOnStartup"), false);
+        settings.setValue(QStringLiteral("session/openTabs"),
+                          QStringList{firstPath, secondPath});
+        settings.sync();
+    }
+    vinson::MainWindow notRestored;
+    auto* freshTabs = notRestored.findChild<QTabBar*>(
+        QStringLiteral("documentTabBar"));
+    QVERIFY(freshTabs != nullptr);
+    QCoreApplication::processEvents();
+    QCOMPARE(freshTabs->count(), 1);
+    QCOMPARE(freshTabs->tabText(0), QStringLiteral("Untitled"));
+}
+
 void MainWindowPersistenceTest::titleBarMenusUseNativeShadows()
 {
     QTemporaryDir directory;
@@ -325,19 +540,27 @@ void MainWindowPersistenceTest::exposesEditHistoryPanel()
         QStringLiteral("editHistoryWidget"));
     auto* historyViewport = window.findChild<QWidget*>(
         QStringLiteral("editHistoryListViewport"));
+    auto* findReplaceWidget = window.findChild<QWidget*>(
+        QStringLiteral("findReplaceWidget"));
     auto* restoreButton = window.findChild<QPushButton*>(
         QStringLiteral("editHistoryRestoreButton"));
+    auto* settingsAction = window.findChild<QAction*>(
+        QStringLiteral("appearanceAndShortcutsAction"));
     auto* editor = window.findChild<vinson::EditorWidget*>();
     auto* theme = window.findChild<vinson::ThemeManager*>();
     QVERIFY(action != nullptr);
     QVERIFY(dock != nullptr);
     QVERIFY(historyWidget != nullptr);
     QVERIFY(historyViewport != nullptr);
+    QVERIFY(findReplaceWidget != nullptr);
     QVERIFY(restoreButton != nullptr);
+    QVERIFY(settingsAction != nullptr);
     QVERIFY(editor != nullptr);
     QVERIFY(theme != nullptr);
     QCOMPARE(action->shortcut(),
              QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H));
+    QCOMPARE(settingsAction->text(),
+             QStringLiteral("&Appearance and Shortcuts…"));
     QVERIFY(!dock->isVisible());
 
     window.show();
@@ -364,6 +587,14 @@ void MainWindowPersistenceTest::exposesEditHistoryPanel()
     QCOMPARE(separator.alpha(), 255);
     QCOMPARE(historyWidget->palette().color(QPalette::Window).alpha(), 255);
     QCOMPARE(historyViewport->palette().color(QPalette::Window).alpha(), 255);
+    QCOMPARE(findReplaceWidget->palette().color(QPalette::Window),
+             historyWidget->palette().color(QPalette::Window));
+    QCOMPARE(findReplaceWidget->property("findPanelBackgroundColor")
+                 .value<QColor>(),
+             historyWidget->palette().color(QPalette::Window));
+    QVERIFY(findReplaceWidget->testAttribute(Qt::WA_StyledBackground));
+    QVERIFY(findReplaceWidget->styleSheet().contains(
+        QStringLiteral("background: #1e2832")));
     QVERIFY(historyWidget->testAttribute(Qt::WA_StyledBackground));
     QVERIFY(historyWidget->testAttribute(Qt::WA_OpaquePaintEvent));
     QVERIFY(historyViewport->testAttribute(Qt::WA_StyledBackground));
@@ -375,11 +606,20 @@ void MainWindowPersistenceTest::exposesEditHistoryPanel()
     QVERIFY(historyWidget->styleSheet().contains(
         QStringLiteral("QListWidget#editHistoryList::item:selected")));
     QVERIFY(historyWidget->styleSheet().contains(
+        QStringLiteral("margin: 1px 2px")));
+    QVERIFY(historyWidget->styleSheet().contains(
+        QStringLiteral("border-radius: 4px")));
+    QVERIFY(historyWidget->styleSheet().contains(
         QStringLiteral("background: #1e2832")));
     QVERIFY(historyWidget->styleSheet().contains(
         QStringLiteral("QWidget#editHistoryListViewport")));
     QVERIFY(window.styleSheet().contains(
         QStringLiteral("QMainWindow#vinsonMainWindow::separator")));
+    QVERIFY(dock->titleBarWidget() == nullptr);
+    QVERIFY(dock->styleSheet().contains(
+        QStringLiteral("QDockWidget#editHistoryDock::close-button")));
+    QVERIFY(dock->styleSheet().contains(
+        QStringLiteral("QDockWidget#editHistoryDock::float-button")));
 
     QVERIFY(editor->styleSheet().contains(
         QStringLiteral("QWidget#qt_scrollarea_vcontainer")));

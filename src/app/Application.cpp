@@ -1,6 +1,7 @@
 #include "app/Application.h"
 
 #include "app/Version.h"
+#include "app/SingleInstance.h"
 #include "settings/Localization.h"
 #include "window/MainWindow.h"
 #include "window/NativeWindowAppearance.h"
@@ -8,7 +9,9 @@
 
 #include <QCoreApplication>
 #include <QIcon>
+#include <QFileInfo>
 #include <QLocale>
+#include <QMessageBox>
 #include <QTimer>
 
 namespace vinson {
@@ -29,13 +32,34 @@ Application::Application(int& argc, char** argv)
             break;
         }
     }
-    (void)installApplicationTranslation(*this, translator_, interfaceLocale);
+    (void)installApplicationTranslation(
+        *this, applicationTranslator_, qtTranslator_, interfaceLocale);
 }
 
 int Application::run()
 {
     const bool smokeTest = arguments().contains(QStringLiteral("--smoke-test"));
+    const QStringList startupPaths = startupFilePaths();
+    if (!smokeTest) {
+        singleInstance_ = new SingleInstance(this);
+        const SingleInstance::StartResult result =
+            singleInstance_->start(startupPaths);
+        if (result == SingleInstance::StartResult::Forwarded) {
+            return 0;
+        }
+        if (result == SingleInstance::StartResult::Error) {
+            QMessageBox::critical(
+                nullptr, tr("Vinson Editor"),
+                tr("Could not start the single-instance service: %1")
+                    .arg(singleInstance_->errorString()));
+            return 1;
+        }
+    }
     MainWindow mainWindow;
+    if (singleInstance_ != nullptr) {
+        connect(singleInstance_, &SingleInstance::openRequested,
+                &mainWindow, &MainWindow::handleExternalOpenRequest);
+    }
     TrayController trayController(&mainWindow, this);
     if (!smokeTest && trayController.isAvailable()) {
         setQuitOnLastWindowClosed(false);
@@ -69,6 +93,7 @@ int Application::run()
     (void)mainWindow.winId();
     (void)setNativeBackgroundAlphaEnabled(&mainWindow, true);
     mainWindow.show();
+    mainWindow.openFiles(startupPaths);
 
     // The smoke mode exercises native widget creation in CI without leaving
     // an interactive application running indefinitely.
@@ -77,6 +102,22 @@ int Application::run()
     }
 
     return exec();
+}
+
+QStringList Application::startupFilePaths() const
+{
+    QStringList paths;
+    const QStringList commandLine = arguments();
+    for (qsizetype index = 1; index < commandLine.size(); ++index) {
+        const QString& argument = commandLine.at(index);
+        if (argument == QStringLiteral("--smoke-test")
+            || argument.startsWith(QStringLiteral("--language="))
+            || argument.startsWith(QLatin1Char('-'))) {
+            continue;
+        }
+        paths.append(QFileInfo(argument).absoluteFilePath());
+    }
+    return paths;
 }
 
 } // namespace vinson

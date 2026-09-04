@@ -59,6 +59,14 @@ add_executable(main_window_persistence_tests MainWindowPersistenceTest.cpp)
 target_link_libraries(main_window_persistence_tests
     PRIVATE vinson_editor_ui Qt6::Test)
 add_test(NAME main_window_persistence_tests COMMAND main_window_persistence_tests)
+
+add_executable(single_instance_tests
+    SingleInstanceTest.cpp
+    ../src/app/SingleInstance.cpp
+    ../src/app/SingleInstance.h)
+target_include_directories(single_instance_tests PRIVATE ../src)
+target_link_libraries(single_instance_tests PRIVATE Qt6::Test)
+add_test(NAME single_instance_tests COMMAND single_instance_tests)
 set_tests_properties(main_window_persistence_tests PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -71,7 +79,8 @@ set(vinson_test_targets
     tray_controller_tests
     global_shortcut_tests
     settings_manager_tests
-    main_window_persistence_tests)
+    main_window_persistence_tests
+    single_instance_tests)
 
 if(TARGET localization_tests)
     list(APPEND vinson_test_targets localization_tests)

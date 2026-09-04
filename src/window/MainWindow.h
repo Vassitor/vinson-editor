@@ -5,8 +5,10 @@
 
 #include <QMainWindow>
 #include <QKeySequence>
+#include <QStringList>
 
 #include <functional>
+#include <vector>
 
 class QAction;
 class QCloseEvent;
@@ -14,11 +16,14 @@ class QDockWidget;
 class QDragEnterEvent;
 class QDropEvent;
 class QLabel;
+class QMenu;
 class QProgressBar;
 class QPushButton;
+class QTabBar;
 
 namespace vinson {
 
+struct Appearance;
 class EditorWidget;
 class EditHistoryWidget;
 class FileManager;
@@ -34,9 +39,12 @@ class MainWindow final : public QMainWindow
 
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
     void setCloseToTrayEnabled(bool enabled) noexcept;
     [[nodiscard]] const QKeySequence& bossKey() const noexcept;
     [[nodiscard]] const QKeySequence& focusShortcut() const noexcept;
+    void openFiles(const QStringList& paths);
+    void handleExternalOpenRequest(const QStringList& paths);
 
 public slots:
     void requestApplicationQuit();
@@ -58,14 +66,46 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
+    struct TabState {
+        qintptr documentHandle = 0;
+        EditorDocument document;
+        LargeFileMode largeFileMode = LargeFileMode::Normal;
+        qint64 caret = 0;
+        qint64 anchor = 0;
+        qint64 firstVisibleLine = 0;
+        qint64 horizontalOffset = 0;
+    };
+
     void createMenus();
     void connectFileManager();
     void connectSearch();
     void showFindReplace(bool replaceMode);
     void showGoToLine();
     void newDocument();
+    int addBlankTab(bool activate = true);
+    void switchToTab(int index, bool force = false);
+    void switchRelativeTab(int delta);
+    void synchronizeTabOrder();
+    void applyTabBarAppearance(const Appearance& appearance);
+    void requestCloseTab(int index);
+    void closeTab(int index);
+    void beginCloseAllTabs(bool quitApplication);
+    void continueCloseAllTabs();
+    void updateTabBarVisibility();
+    void updateTabTitle(int index);
+    void snapshotCurrentTabView();
+    void replaceCurrentTabDocumentHandle();
+    [[nodiscard]] TabState& currentTab();
+    [[nodiscard]] const TabState& currentTab() const;
+    [[nodiscard]] bool currentTabIsPristineUntitled() const;
+    [[nodiscard]] int tabIndexForPath(const QString& path) const;
+    [[nodiscard]] QStringList sessionTabPaths() const;
     void chooseAndOpenFile();
     void requestOpenFile(const QString& path);
+    void processPendingOpenFiles();
+    void addRecentFile(const QString& path);
+    void removeRecentFile(const QString& path);
+    void rebuildRecentFilesMenu();
     bool saveDocument();
     bool saveDocumentAs();
     bool startSave(const QString& path);
@@ -84,6 +124,7 @@ private:
     [[nodiscard]] QString chooseSavePath();
 
     EditorWidget* editor_ = nullptr;
+    QTabBar* tabBar_ = nullptr;
     EditHistoryWidget* editHistoryWidget_ = nullptr;
     QDockWidget* editHistoryDock_ = nullptr;
     FileManager* fileManager_ = nullptr;
@@ -98,6 +139,7 @@ private:
     QPushButton* cancelOperationButton_ = nullptr;
     QAction* newAction_ = nullptr;
     QAction* openAction_ = nullptr;
+    QMenu* recentFilesMenu_ = nullptr;
     QAction* saveAction_ = nullptr;
     QAction* saveAsAction_ = nullptr;
     QAction* reloadAction_ = nullptr;
@@ -113,16 +155,26 @@ private:
     QAction* minimalModeAction_ = nullptr;
     QAction* increaseBackgroundAlphaAction_ = nullptr;
     QAction* decreaseBackgroundAlphaAction_ = nullptr;
-    EditorDocument document_;
+    std::vector<TabState> tabs_;
+    int currentTabIndex_ = -1;
+    int loadingTabIndex_ = -1;
+    int pendingNewTabs_ = 0;
+    QStringList pendingOpenPaths_;
+    QStringList closingSessionPaths_;
     std::function<void()> pendingAfterSave_;
     bool loadReplacedDocument_ = false;
     bool closeAfterSave_ = false;
+    bool closeAllTabsInProgress_ = false;
+    bool quitAfterClosingTabs_ = false;
     bool closeToTrayEnabled_ = false;
     bool preferredWordWrap_ = false;
     bool restoringSettings_ = false;
-    LargeFileMode largeFileMode_ = LargeFileMode::Normal;
+    bool switchingTabs_ = false;
+    bool synchronizingTabOrder_ = false;
+    bool restoreTabsOnStartup_ = true;
     qint64 currentLine_ = 1;
     QString lastDirectory_;
+    QStringList recentFiles_;
     QKeySequence bossKey_;
     QKeySequence focusShortcut_;
 };

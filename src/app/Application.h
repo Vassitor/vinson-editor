@@ -5,6 +5,8 @@
 
 namespace vinson {
 
+class SingleInstance;
+
 class Application final : public QApplication
 {
     Q_OBJECT
@@ -15,7 +17,11 @@ public:
     int run();
 
 private:
-    QTranslator translator_;
+    [[nodiscard]] QStringList startupFilePaths() const;
+
+    QTranslator applicationTranslator_;
+    QTranslator qtTranslator_;
+    SingleInstance* singleInstance_ = nullptr;
 };
 
 } // namespace vinson

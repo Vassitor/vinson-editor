@@ -12,6 +12,8 @@ class QWidget;
 
 namespace vinson {
 
+struct Appearance;
+
 class FindReplaceWidget final : public QFrame
 {
     Q_OBJECT
@@ -24,6 +26,7 @@ public:
     [[nodiscard]] QString findText() const;
     [[nodiscard]] QString replacementText() const;
     [[nodiscard]] SearchOptions options() const;
+    void applyAppearance(const Appearance& appearance, bool frameless);
     void setResult(SearchResult result, const QString& message);
 
 signals:

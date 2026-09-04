@@ -9,6 +9,7 @@
 #include <QEventLoop>
 #include <QMenu>
 #include <QFontMetricsF>
+#include <QPainter>
 #include <QScrollBar>
 #include <QWheelEvent>
 
@@ -50,6 +51,13 @@ EditorWidget::EditorWidget(QWidget* parent)
 {
     setAttribute(Qt::WA_TranslucentBackground);
     viewport()->setAttribute(Qt::WA_TranslucentBackground);
+    // Render Scintilla's intermediate surfaces at the current device-pixel
+    // ratio. Its DPI-change handler invalidates these surfaces when the window
+    // moves between screens, so text and line numbers are rasterized again at
+    // the destination monitor's native resolution instead of being scaled
+    // from the previous monitor's buffer.
+    setScaleTechnique(
+        static_cast<sptr_t>(Scintilla::ScaleTechnique::PixelAligned));
     setCodePage(Scintilla::CpUtf8);
     setMarginTypeN(0, static_cast<sptr_t>(Scintilla::MarginType::Number));
     setScrollWidthTracking(true);
@@ -213,6 +221,40 @@ int EditorWidget::documentOptionFlags() const
     return static_cast<int>(documentOptions());
 }
 
+sptr_t EditorWidget::retainCurrentDocument()
+{
+    const sptr_t document = docPointer();
+    addRefDocument(document);
+    return document;
+}
+
+sptr_t EditorWidget::createTabDocument()
+{
+    return createDocument(
+        0, static_cast<sptr_t>(Scintilla::DocumentOption::Default));
+}
+
+void EditorWidget::activateTabDocument(sptr_t document, LargeFileMode mode)
+{
+    if (document == 0) {
+        return;
+    }
+    setDocPointer(document);
+    setCodePage(Scintilla::CpUtf8);
+    setILexer(0);
+    largeFileMode_ = mode;
+    refreshLineNumberMargin();
+    emitCursorPosition();
+    viewport()->update();
+}
+
+void EditorWidget::releaseTabDocument(sptr_t document)
+{
+    if (document != 0) {
+        releaseDocument(document);
+    }
+}
+
 void EditorWidget::setEditorFont(const QFont& font)
 {
     editorFont_ = font;
@@ -249,6 +291,35 @@ void EditorWidget::setBackgroundColor(const QColor& color)
     restoreLineNumberStyle();
     setBufferedDraw(backgroundColor_.alpha() == 255);
     viewport()->update();
+}
+
+void EditorWidget::paintEvent(QPaintEvent* event)
+{
+    if (backgroundColor_.alpha() < 255) {
+        // Scintilla paints directly onto the viewport. With a translucent
+        // background its normal SourceOver fill cannot erase glyphs already
+        // present in Qt's backing store, which makes old text survive the
+        // scroll blit and overlap the newly painted lines. Clear only the
+        // damaged area first so the following Scintilla paint starts from a
+        // transparent surface without giving up its efficient scroll path.
+        QPainter clearPainter(viewport());
+        clearPainter.setCompositionMode(QPainter::CompositionMode_Source);
+        clearPainter.fillRect(event->rect(), Qt::transparent);
+    }
+
+    ScintillaEdit::paintEvent(event);
+
+    // Scintilla can leave the final logical pixel beside a DPI-scaled scroll
+    // bar untouched after a resize. Paint that unused edge last so it has the
+    // configured background (including alpha) instead of exposing the black
+    // native translucent surface on Windows.
+    const int rightEdge = viewport()->width() - 1;
+    if (rightEdge >= 0 && event->rect().right() >= rightEdge) {
+        QPainter seamPainter(viewport());
+        seamPainter.setCompositionMode(QPainter::CompositionMode_Source);
+        seamPainter.fillRect(rightEdge, event->rect().top(), 1,
+                             event->rect().height(), backgroundColor_);
+    }
 }
 
 void EditorWidget::setCursorColor(const QColor& color)

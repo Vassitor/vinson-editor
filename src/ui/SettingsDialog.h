@@ -6,6 +6,7 @@
 #include <QKeySequence>
 
 class QDoubleSpinBox;
+class QCheckBox;
 class QFontComboBox;
 class QKeySequenceEdit;
 class QPushButton;
@@ -22,11 +23,13 @@ public:
     explicit SettingsDialog(const Appearance& appearance,
                             const QKeySequence& bossKey,
                             const QKeySequence& focusShortcut,
+                            bool restoreTabsOnStartup,
                             QWidget* parent = nullptr);
 
     [[nodiscard]] const Appearance& appearance() const noexcept;
     [[nodiscard]] const QKeySequence& bossKey() const noexcept;
     [[nodiscard]] const QKeySequence& focusShortcut() const noexcept;
+    [[nodiscard]] bool restoreTabsOnStartup() const noexcept;
     void setAppearance(const Appearance& appearance);
     void setBossKey(const QKeySequence& bossKey);
     void setFocusShortcut(const QKeySequence& focusShortcut);
@@ -55,6 +58,7 @@ private:
     QSpinBox* textAlphaSpin_ = nullptr;
     QKeySequenceEdit* bossKeyEdit_ = nullptr;
     QKeySequenceEdit* focusShortcutEdit_ = nullptr;
+    QCheckBox* restoreTabsOnStartupCheck_ = nullptr;
     bool updating_ = false;
 };
 

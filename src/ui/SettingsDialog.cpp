@@ -5,10 +5,12 @@
 
 #include <QApplication>
 #include <QColorDialog>
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QFontComboBox>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QKeySequenceEdit>
@@ -16,13 +18,31 @@
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 namespace vinson {
+namespace {
+
+QColor blendedColor(const QColor& background, const QColor& foreground,
+                    int foregroundPercent)
+{
+    const int backgroundPercent = 100 - foregroundPercent;
+    return QColor(
+        (background.red() * backgroundPercent
+         + foreground.red() * foregroundPercent) / 100,
+        (background.green() * backgroundPercent
+         + foreground.green() * foregroundPercent) / 100,
+        (background.blue() * backgroundPercent
+         + foreground.blue() * foregroundPercent) / 100);
+}
+
+} // namespace
 
 SettingsDialog::SettingsDialog(const Appearance& appearance,
                                const QKeySequence& bossKey,
                                const QKeySequence& focusShortcut,
+                               bool restoreTabsOnStartup,
                                QWidget* parent)
     : QDialog(parent)
     , fontCombo_(new QFontComboBox(this))
@@ -37,13 +57,15 @@ SettingsDialog::SettingsDialog(const Appearance& appearance,
     , textAlphaSpin_(new QSpinBox(this))
     , bossKeyEdit_(new QKeySequenceEdit(this))
     , focusShortcutEdit_(new QKeySequenceEdit(this))
+    , restoreTabsOnStartupCheck_(new QCheckBox(
+          tr("Restore open tabs on startup"), this))
 {
     qRegisterMetaType<Appearance>();
     setPalette(QApplication::palette());
     setAutoFillBackground(true);
     setWindowTitle(tr("Settings"));
     setModal(true);
-    setMinimumWidth(440);
+    setMinimumSize(520, 540);
 
     fontCombo_->setObjectName(QStringLiteral("fontFamily"));
     fontSizeSpin_->setObjectName(QStringLiteral("fontSize"));
@@ -65,6 +87,9 @@ SettingsDialog::SettingsDialog(const Appearance& appearance,
     bossKeyEdit_->setMaximumSequenceLength(1);
     focusShortcutEdit_->setObjectName(QStringLiteral("focusShortcut"));
     focusShortcutEdit_->setMaximumSequenceLength(1);
+    restoreTabsOnStartupCheck_->setObjectName(
+        QStringLiteral("restoreTabsOnStartup"));
+    restoreTabsOnStartupCheck_->setChecked(restoreTabsOnStartup);
 
     auto* alphaRow = new QWidget(this);
     auto* alphaLayout = new QHBoxLayout(alphaRow);
@@ -78,21 +103,10 @@ SettingsDialog::SettingsDialog(const Appearance& appearance,
     textAlphaLayout->addWidget(textAlphaSlider_, 1);
     textAlphaLayout->addWidget(textAlphaSpin_);
 
-    auto* form = new QFormLayout;
-    form->addRow(tr("Font:"), fontCombo_);
-    form->addRow(tr("Font size:"), fontSizeSpin_);
-    form->addRow(tr("Text color:"), textColorButton_);
-    form->addRow(tr("Font opacity:"), textAlphaRow);
-    form->addRow(tr("Background color:"), backgroundColorButton_);
-    form->addRow(tr("Background alpha:"), alphaRow);
-    form->addRow(tr("Cursor color:"), cursorColorButton_);
-    form->addRow(tr("Selected text color:"), selectionTextColorButton_);
-    form->addRow(tr("Boss key:"), bossKeyEdit_);
-    form->addRow(tr("Focus shortcut:"), focusShortcutEdit_);
-
     auto* explanation = new QLabel(
         tr("Background alpha changes only the background. Font opacity changes editor text while window controls remain opaque."),
         this);
+    explanation->setObjectName(QStringLiteral("transparencyExplanation"));
     explanation->setWordWrap(true);
     auto* bossKeyExplanation = new QLabel(
         tr("The boss key works system-wide. Include Ctrl, Alt, Shift, or the Windows key."),
@@ -103,15 +117,125 @@ SettingsDialog::SettingsDialog(const Appearance& appearance,
         this);
     focusShortcutExplanation->setWordWrap(true);
 
+    auto* categories = new QTabWidget(this);
+    categories->setObjectName(QStringLiteral("settingsCategories"));
+
+    auto* appearancePage = new QWidget(categories);
+    appearancePage->setObjectName(QStringLiteral("appearanceCategory"));
+    auto* appearanceLayout = new QVBoxLayout(appearancePage);
+    appearanceLayout->setContentsMargins(12, 12, 12, 12);
+    appearanceLayout->setSpacing(12);
+
+    auto* typographyGroup = new QGroupBox(tr("Typography"), appearancePage);
+    typographyGroup->setObjectName(QStringLiteral("typographyGroup"));
+    auto* typographyForm = new QFormLayout(typographyGroup);
+    typographyForm->addRow(tr("Font:"), fontCombo_);
+    typographyForm->addRow(tr("Font size:"), fontSizeSpin_);
+
+    auto* colorsGroup = new QGroupBox(tr("Colors"), appearancePage);
+    colorsGroup->setObjectName(QStringLiteral("colorsGroup"));
+    auto* colorsForm = new QFormLayout(colorsGroup);
+    colorsForm->addRow(tr("Text color:"), textColorButton_);
+    colorsForm->addRow(tr("Background color:"), backgroundColorButton_);
+    colorsForm->addRow(tr("Cursor color:"), cursorColorButton_);
+    colorsForm->addRow(tr("Selected text color:"),
+                       selectionTextColorButton_);
+
+    auto* transparencyGroup = new QGroupBox(
+        tr("Transparency"), appearancePage);
+    transparencyGroup->setObjectName(QStringLiteral("transparencyGroup"));
+    auto* transparencyLayout = new QVBoxLayout(transparencyGroup);
+    auto* transparencyForm = new QFormLayout;
+    transparencyForm->addRow(tr("Font opacity:"), textAlphaRow);
+    transparencyForm->addRow(tr("Background alpha:"), alphaRow);
+    transparencyLayout->addLayout(transparencyForm);
+    transparencyLayout->addWidget(explanation);
+
+    appearanceLayout->addWidget(typographyGroup);
+    appearanceLayout->addWidget(colorsGroup);
+    appearanceLayout->addWidget(transparencyGroup);
+    appearanceLayout->addStretch();
+
+    auto* shortcutsPage = new QWidget(categories);
+    shortcutsPage->setObjectName(QStringLiteral("shortcutsCategory"));
+    auto* shortcutsLayout = new QVBoxLayout(shortcutsPage);
+    shortcutsLayout->setContentsMargins(12, 12, 12, 12);
+    shortcutsLayout->setSpacing(10);
+    auto* shortcutsGroup = new QGroupBox(
+        tr("Global Shortcuts"), shortcutsPage);
+    shortcutsGroup->setObjectName(QStringLiteral("shortcutsGroup"));
+    auto* shortcutsForm = new QFormLayout(shortcutsGroup);
+    shortcutsForm->addRow(tr("Boss key:"), bossKeyEdit_);
+    shortcutsForm->addRow(tr("Focus shortcut:"), focusShortcutEdit_);
+    shortcutsLayout->addWidget(shortcutsGroup);
+    shortcutsLayout->addWidget(bossKeyExplanation);
+    shortcutsLayout->addWidget(focusShortcutExplanation);
+    shortcutsLayout->addStretch();
+
+    auto* sessionPage = new QWidget(categories);
+    sessionPage->setObjectName(QStringLiteral("sessionCategory"));
+    auto* sessionLayout = new QVBoxLayout(sessionPage);
+    sessionLayout->setContentsMargins(12, 12, 12, 12);
+    sessionLayout->setSpacing(10);
+    auto* sessionGroup = new QGroupBox(tr("Session"), sessionPage);
+    sessionGroup->setObjectName(QStringLiteral("sessionGroup"));
+    auto* sessionGroupLayout = new QVBoxLayout(sessionGroup);
+    sessionGroupLayout->addWidget(restoreTabsOnStartupCheck_);
+    auto* sessionExplanation = new QLabel(
+        tr("Reopen file-backed tabs from the previous session. Unsaved new tabs are not stored."),
+        sessionPage);
+    sessionExplanation->setWordWrap(true);
+    sessionGroupLayout->addWidget(sessionExplanation);
+    sessionLayout->addWidget(sessionGroup);
+    sessionLayout->addStretch();
+
+    categories->addTab(appearancePage, tr("Appearance"));
+    categories->addTab(shortcutsPage, tr("Shortcuts"));
+    categories->addTab(sessionPage, tr("Session"));
+
+    const QColor dialogBackground = palette().color(QPalette::Window);
+    const QColor dialogText = palette().color(QPalette::WindowText);
+    const QColor categoryText = blendedColor(dialogBackground, dialogText, 58);
+    const QColor categoryBorder = blendedColor(
+        dialogBackground, dialogText, 18);
+    setProperty("categoryTextColor", categoryText);
+    setProperty("categoryBorderColor", categoryBorder);
+    setStyleSheet(QStringLiteral(R"(
+QGroupBox {
+    border: 1px solid %1;
+    border-radius: 6px;
+    color: %2;
+    font-weight: 400;
+    margin-top: 10px;
+    padding-top: 8px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+}
+QTabWidget::pane {
+    border: 1px solid %1;
+    top: -1px;
+}
+QTabBar::tab {
+    border: 1px solid %1;
+    color: %2;
+    padding: 7px 16px;
+}
+QTabBar::tab:selected { color: %3; }
+QLabel#transparencyExplanation { color: %2; }
+)")
+        .arg(categoryBorder.name(QColor::HexRgb),
+             categoryText.name(QColor::HexRgb),
+             dialogText.name(QColor::HexRgb)));
+
     auto* buttons = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel
             | QDialogButtonBox::RestoreDefaults,
         this);
     auto* layout = new QVBoxLayout(this);
-    layout->addLayout(form);
-    layout->addWidget(explanation);
-    layout->addWidget(bossKeyExplanation);
-    layout->addWidget(focusShortcutExplanation);
+    layout->addWidget(categories, 1);
     layout->addWidget(buttons);
 
     connect(fontCombo_, &QFontComboBox::currentFontChanged,
@@ -226,6 +350,11 @@ const QKeySequence& SettingsDialog::focusShortcut() const noexcept
     return focusShortcut_;
 }
 
+bool SettingsDialog::restoreTabsOnStartup() const noexcept
+{
+    return restoreTabsOnStartupCheck_->isChecked();
+}
+
 void SettingsDialog::setAppearance(const Appearance& appearance)
 {
     updating_ = true;
@@ -261,7 +390,8 @@ void SettingsDialog::chooseColor(QColor& color, QPushButton* button,
 {
     QColor initial = color;
     initial.setAlpha(255);
-    const QColor chosen = QColorDialog::getColor(initial, this, title);
+    const QColor chosen = QColorDialog::getColor(
+        initial, this, title, QColorDialog::DontUseNativeDialog);
     if (!chosen.isValid()) {
         return;
     }
@@ -288,10 +418,31 @@ void SettingsDialog::refreshColorButtons()
 void SettingsDialog::styleColorButton(QPushButton* button, const QColor& color)
 {
     const QColor text = color.lightness() < 128 ? Qt::white : Qt::black;
+    const QColor border = color.lightness() < 128
+        ? color.lighter(150) : color.darker(135);
     button->setText(color.name(QColor::HexRgb).toUpper());
+    button->setProperty("swatchColor", color.name(QColor::HexRgb));
+    button->setMinimumHeight(34);
     button->setStyleSheet(
-        QStringLiteral("QPushButton { background: %1; color: %2; }")
-            .arg(color.name(QColor::HexRgb), text.name(QColor::HexRgb)));
+        QStringLiteral(R"(
+QPushButton {
+    background-color: %1;
+    border: 1px solid %3;
+    border-radius: 5px;
+    color: %2;
+    padding: 5px 12px;
+}
+QPushButton:hover,
+QPushButton:pressed,
+QPushButton:focus {
+    background-color: %1;
+    color: %2;
+}
+QPushButton:hover,
+QPushButton:focus { border-color: %2; }
+)")
+            .arg(color.name(QColor::HexRgb), text.name(QColor::HexRgb),
+                 border.name(QColor::HexRgb)));
 }
 
 } // namespace vinson

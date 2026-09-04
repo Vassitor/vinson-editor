@@ -11,6 +11,7 @@ class EditorWidgetTest final : public QObject
 
 private slots:
     void storesUtf8Text();
+    void usesDevicePixelAlignedRendering();
     void defaultsToWrappedTextWithoutHorizontalScrolling();
     void acceptsKeyboardInput();
     void togglesViewOptions();
@@ -20,6 +21,16 @@ private slots:
     void requestsFontSizeAdjustmentFromControlWheel();
     void exposesAndRestoresEditHistory();
 };
+
+void EditorWidgetTest::usesDevicePixelAlignedRendering()
+{
+    vinson::EditorWidget editor;
+
+    QCOMPARE(editor.scaleTechnique(),
+             static_cast<sptr_t>(Scintilla::ScaleTechnique::PixelAligned));
+    QCOMPARE(editor.viewport()->property("ScintillaScale").toDouble(),
+             editor.devicePixelRatioF());
+}
 
 void EditorWidgetTest::defaultsToWrappedTextWithoutHorizontalScrolling()
 {

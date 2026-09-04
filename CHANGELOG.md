@@ -9,6 +9,15 @@ the Semantic Versioning scheme.
 
 ### Added
 
+- Multi-document tabs in the default window mode, with `Ctrl+Alt+Left/Right`
+  navigation, browser-style top-chrome presentation, drag reordering, and
+  independent editor state for each open file.
+- Single-instance launch forwarding: reopening Vinson Editor now activates the
+  running window and opens the requested files as tabs.
+- An optional session setting that restores file-backed tabs on the next
+  startup.
+- A persistent **Open Recent** menu with ordered, de-duplicated file history,
+  missing-file cleanup, and a clear-list command.
 - A dockable edit-history timeline backed by Scintilla's native undo stack,
   with current/saved markers and restoration to any logical edit state.
 - Persistent font-size adjustment with `Ctrl+Mouse Wheel`.
@@ -18,6 +27,16 @@ the Semantic Versioning scheme.
 
 ### Changed
 
+- Grouped the settings dialog into appearance and shortcut categories, kept
+  color swatches stable on hover, and refined the edit-history panel with
+  menu-like rows while retaining native dock controls. Standard save, settings,
+  and color-dialog buttons now use the bundled Qt Chinese translations.
+- Matched the find and replace panel background to the edit-history panel in
+  the default window mode.
+- Prevented a one-pixel black seam from appearing beside the vertical scroll
+  bar after maximizing or resizing the window.
+- Kept editor text and line numbers sharp when moving the window between
+  monitors with different display scaling.
 - Unified whole-buffer and streaming line-ending detection, including CRLF
   sequences split across input chunks.
 - Made Qt Linguist Tools optional for core builds while retaining translated

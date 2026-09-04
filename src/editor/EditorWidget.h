@@ -14,6 +14,7 @@
 #include "search/SearchTypes.h"
 
 class QContextMenuEvent;
+class QPaintEvent;
 class QWheelEvent;
 
 namespace vinson {
@@ -53,6 +54,10 @@ public:
     [[nodiscard]] bool isEmpty() const;
     [[nodiscard]] LargeFileMode largeFileMode() const noexcept;
     [[nodiscard]] int documentOptionFlags() const;
+    [[nodiscard]] sptr_t retainCurrentDocument();
+    [[nodiscard]] sptr_t createTabDocument();
+    void activateTabDocument(sptr_t document, LargeFileMode mode);
+    void releaseTabDocument(sptr_t document);
 
     void setEditorFont(const QFont& font);
     void setTextColor(const QColor& color);
@@ -107,6 +112,7 @@ signals:
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void paintEvent(QPaintEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
 
 private:

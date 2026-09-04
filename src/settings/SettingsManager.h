@@ -6,6 +6,7 @@
 #include <QKeySequence>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 #include <memory>
 
@@ -13,11 +14,17 @@ class QSettings;
 
 namespace vinson {
 
+inline constexpr qsizetype maximumRecentFiles = 10;
+inline constexpr qsizetype maximumRestoredTabs = 32;
+
 struct ApplicationSettings
 {
     Appearance appearance;
     QByteArray windowGeometry;
     QString lastDirectory;
+    QStringList recentFiles;
+    QStringList openTabs;
+    bool restoreTabsOnStartup = true;
     bool wordWrap = false;
     bool lineNumbers = true;
     bool alwaysOnTop = false;

@@ -5,11 +5,17 @@
     <name>vinson::MainWindow</name>
     <message><source>Cancel</source><translation>取消</translation></message>
     <message><source>Ready</source><translation>就绪</translation></message>
+    <message><source>Untitled</source><translation>未命名</translation></message>
     <message><source>Ln %1, Col %2</source><translation>第 %1 行，第 %2 列</translation></message>
     <message><source>Cancel or wait for the current file operation.</source><translation>请取消当前文件操作或等待操作完成。</translation></message>
     <message><source>&amp;File</source><translation>文件(&amp;F)</translation></message>
     <message><source>&amp;New</source><translation>新建(&amp;N)</translation></message>
     <message><source>&amp;Open…</source><translation>打开(&amp;O)…</translation></message>
+    <message><source>Open &amp;Recent</source><translation>最近使用的文件(&amp;R)</translation></message>
+    <message><source>No Recent Files</source><translation>暂无最近使用的文件</translation></message>
+    <message><source>&amp;Clear Recent Files</source><translation>清除最近使用的文件(&amp;C)</translation></message>
+    <message><source>Open recent file</source><translation>打开最近使用的文件</translation></message>
+    <message><source>The file no longer exists and was removed from the recent files list.\n%1</source><translation>该文件已不存在，已从最近使用的文件列表中移除。\n%1</translation></message>
     <message><source>&amp;Save</source><translation>保存(&amp;S)</translation></message>
     <message><source>Save &amp;As…</source><translation>另存为(&amp;A)…</translation></message>
     <message><source>&amp;Reload</source><translation>重新加载(&amp;R)</translation></message>
@@ -37,7 +43,7 @@
     <message><source>&amp;Frameless Mode</source><translation>无边框模式(&amp;F)</translation></message>
     <message><source>&amp;Minimal Mode</source><translation>极简模式(&amp;M)</translation></message>
     <message><source>&amp;Settings</source><translation>设置(&amp;S)</translation></message>
-    <message><source>&amp;Appearance…</source><translation>外观(&amp;A)…</translation></message>
+    <message><source>&amp;Appearance and Shortcuts…</source><translation>外观和快捷键(&amp;A)…</translation></message>
     <message><source>Increase Background Opacity</source><translation>提高背景不透明度</translation></message>
     <message><source>Decrease Background Opacity</source><translation>降低背景不透明度</translation></message>
     <message><source>Background alpha: %1</source><translation>背景透明度：%1</translation></message>
@@ -65,6 +71,18 @@
     <message><source>Save changes to %1?</source><translation>是否保存对 %1 的更改？</translation></message>
     <message><source>Save Text File</source><translation>保存文本文件</translation></message>
     <message><source>Text files (*.txt);;All files (*)</source><translation>文本文件 (*.txt);;所有文件 (*)</translation></message>
+</context>
+<context>
+    <name>vinson::Application</name>
+    <message><source>Vinson Editor</source><translation>Vinson Editor</translation></message>
+    <message><source>Could not start the single-instance service: %1</source><translation>无法启动单例服务：%1</translation></message>
+</context>
+<context>
+    <name>vinson::SingleInstance</name>
+    <message><source>Could not create the single-instance request directory.</source><translation>无法创建单例请求目录。</translation></message>
+    <message><source>Could not identify the running instance.</source><translation>无法识别正在运行的程序实例。</translation></message>
+    <message><source>The running instance is not ready.</source><translation>正在运行的程序实例尚未就绪。</translation></message>
+    <message><source>The running instance did not acknowledge the request.</source><translation>正在运行的程序实例未确认该请求。</translation></message>
 </context>
 <context>
     <name>vinson::EditHistoryWidget</name>
@@ -113,6 +131,14 @@
     <name>vinson::SettingsDialog</name>
     <message><source>Appearance</source><translation>外观</translation></message>
     <message><source>Settings</source><translation>设置</translation></message>
+    <message><source>Typography</source><translation>字体</translation></message>
+    <message><source>Colors</source><translation>颜色</translation></message>
+    <message><source>Transparency</source><translation>透明度</translation></message>
+    <message><source>Shortcuts</source><translation>快捷键</translation></message>
+    <message><source>Session</source><translation>会话</translation></message>
+    <message><source>Restore open tabs on startup</source><translation>启动时恢复上次打开的标签页</translation></message>
+    <message><source>Reopen file-backed tabs from the previous session. Unsaved new tabs are not stored.</source><translation>重新打开上次会话中已有文件的标签页；未保存的新标签页不会被存储。</translation></message>
+    <message><source>Global Shortcuts</source><translation>全局快捷键</translation></message>
     <message><source> pt</source><translation> 磅</translation></message>
     <message><source>Font:</source><translation>字体：</translation></message>
     <message><source>Font size:</source><translation>字号：</translation></message>

@@ -5,17 +5,22 @@
 
 #include <QImage>
 #include <QDoubleSpinBox>
+#include <QGroupBox>
 #include <QMainWindow>
 #include <QKeySequenceEdit>
 #include <QMenuBar>
 #include <QPainter>
+#include <QPushButton>
+#include <QScrollBar>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QStatusBar>
+#include <QTabWidget>
 #include <QVBoxLayout>
 #include <QtTest>
 
 #include <algorithm>
+#include <cstdlib>
 
 class AppearanceTest final : public QObject
 {
@@ -24,10 +29,13 @@ class AppearanceTest final : public QObject
 private slots:
     void appliesAppearanceWithoutChangingDocument();
     void appliesReadableWindowChromePalette();
+    void resizeDoesNotExposeDarkScrollBarSeam();
     void transparentBackgroundKeepsTextVisible();
+    void transparentScrollClearsPreviousText();
     void transparentFontRendersPartialAlpha();
     void nativeFramedBackgroundAlphaIsAvailable();
     void dialogPreviewsBackgroundAlpha();
+    void colorSwatchesKeepTheirColorOnHover();
 };
 
 void AppearanceTest::appliesAppearanceWithoutChangingDocument()
@@ -121,6 +129,40 @@ void AppearanceTest::appliesReadableWindowChromePalette()
         QStringLiteral("QScrollBar::sub-page { background: #f0e6dc; }")));
 }
 
+void AppearanceTest::resizeDoesNotExposeDarkScrollBarSeam()
+{
+    QWidget window;
+    window.setAttribute(Qt::WA_TranslucentBackground);
+    auto* editor = new vinson::EditorWidget(&window);
+    auto* layout = new QVBoxLayout(&window);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(editor);
+    vinson::ThemeManager manager(editor, &window);
+
+    editor->setTextUtf8(QByteArray("line\n").repeated(200));
+    window.resize(280, 160);
+    window.show();
+    QCoreApplication::processEvents();
+    window.resize(420, 240);
+    QCoreApplication::processEvents();
+
+    QVERIFY(editor->verticalScrollBar()->isVisible());
+    const int scrollBarLeft = editor->verticalScrollBar()
+                                  ->mapTo(editor, QPoint(0, 0)).x();
+    QVERIFY(scrollBarLeft > 0);
+    QImage image(editor->size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::black);
+    QPainter painter(&image);
+    editor->render(&painter);
+    painter.end();
+
+    const QColor expected = editor->backgroundColor();
+    for (const int x : {scrollBarLeft - 1, scrollBarLeft}) {
+        const QColor actual = image.pixelColor(x, editor->height() / 2);
+        QCOMPARE(actual, expected);
+    }
+}
+
 void AppearanceTest::transparentBackgroundKeepsTextVisible()
 {
     QWidget window;
@@ -169,6 +211,58 @@ void AppearanceTest::transparentBackgroundKeepsTextVisible()
                                 static_cast<int>(editor->textHeightF(0) / 2))), 0);
     QCOMPARE(qAlpha(image.pixel(4, image.height() - 20)), 0);
     QCOMPARE(editor->textColor().alpha(), 255);
+}
+
+void AppearanceTest::transparentScrollClearsPreviousText()
+{
+    QWidget window;
+    window.setAttribute(Qt::WA_TranslucentBackground);
+    auto* editor = new vinson::EditorWidget(&window);
+    auto* layout = new QVBoxLayout(&window);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(editor);
+    vinson::ThemeManager manager(editor, &window);
+
+    editor->setLineNumbersVisible(false);
+    editor->setHScrollBar(false);
+    editor->setVScrollBar(false);
+    editor->setCaretWidth(0);
+    QByteArray document;
+    for (int line = 0; line < 40; ++line) {
+        document += QByteArray::number(line)
+            + (line % 2 == 0 ? " MMMMWWWW" : " iiiillll") + '\n';
+    }
+    editor->setTextUtf8(document);
+    vinson::Appearance appearance = manager.appearance();
+    appearance.textColor = QColor(255, 255, 255);
+    appearance.backgroundColor = QColor(0, 0, 0, 0);
+    manager.setFramelessMode(true);
+    manager.applyAppearance(appearance);
+
+    window.resize(300, 120);
+    window.show();
+    QCoreApplication::processEvents();
+
+    QImage reused(editor->viewport()->size(),
+                  QImage::Format_ARGB32_Premultiplied);
+    reused.fill(Qt::transparent);
+    editor->viewport()->render(&reused, QPoint(), QRegion(),
+                               QWidget::RenderFlags{});
+
+    editor->lineScroll(0, 1);
+    QCoreApplication::processEvents();
+
+    QImage expected(editor->viewport()->size(),
+                    QImage::Format_ARGB32_Premultiplied);
+    expected.fill(Qt::transparent);
+    editor->viewport()->render(&expected, QPoint(), QRegion(),
+                               QWidget::RenderFlags{});
+
+    // Repaint the scrolled state over the previous frame. Translucent
+    // background pixels must replace that frame instead of blending with it.
+    editor->viewport()->render(&reused, QPoint(), QRegion(),
+                               QWidget::RenderFlags{});
+    QCOMPARE(reused, expected);
 }
 
 void AppearanceTest::nativeFramedBackgroundAlphaIsAvailable()
@@ -231,14 +325,46 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
     vinson::Appearance appearance = vinson::ThemeManager::defaultAppearance();
     const QKeySequence bossKey(QStringLiteral("Ctrl+Alt+Space"));
     const QKeySequence focusShortcut(QStringLiteral("Ctrl+Alt+F"));
-    vinson::SettingsDialog dialog(appearance, bossKey, focusShortcut);
+    vinson::SettingsDialog dialog(appearance, bossKey, focusShortcut, true);
     QSignalSpy previewSpy(&dialog, &vinson::SettingsDialog::previewChanged);
     auto* fontSize = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("fontSize"));
     auto* alpha = dialog.findChild<QSlider*>(QStringLiteral("backgroundAlpha"));
     auto* textAlpha = dialog.findChild<QSlider*>(QStringLiteral("textAlpha"));
+    auto* categories = dialog.findChild<QTabWidget*>(
+        QStringLiteral("settingsCategories"));
     QVERIFY(fontSize != nullptr);
     QVERIFY(alpha != nullptr);
     QVERIFY(textAlpha != nullptr);
+    QVERIFY(categories != nullptr);
+    QCOMPARE(categories->count(), 3);
+    QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("typographyGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("colorsGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("transparencyGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("shortcutsGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("sessionGroup")) != nullptr);
+    QVERIFY(dialog.restoreTabsOnStartup());
+    const QColor categoryText =
+        dialog.property("categoryTextColor").value<QColor>();
+    const QColor categoryBorder =
+        dialog.property("categoryBorderColor").value<QColor>();
+    QVERIFY(categoryText.isValid());
+    QVERIFY(categoryBorder.isValid());
+    const QColor dialogBackground = dialog.palette().color(QPalette::Window);
+    const QColor dialogText = dialog.palette().color(QPalette::WindowText);
+    auto colorDistance = [](const QColor& first, const QColor& second) {
+        return std::abs(first.red() - second.red())
+            + std::abs(first.green() - second.green())
+            + std::abs(first.blue() - second.blue());
+    };
+    QVERIFY(colorDistance(dialogBackground, categoryText)
+            < colorDistance(dialogBackground, dialogText));
+    QVERIFY(colorDistance(dialogBackground, categoryBorder)
+            < colorDistance(dialogBackground, categoryText));
     auto* bossKeyEdit = dialog.findChild<QKeySequenceEdit*>(
         QStringLiteral("bossKey"));
     QVERIFY(bossKeyEdit != nullptr);
@@ -270,6 +396,43 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
         QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
     QCOMPARE(dialog.focusShortcut(),
              QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
+}
+
+void AppearanceTest::colorSwatchesKeepTheirColorOnHover()
+{
+    const vinson::Appearance appearance =
+        vinson::ThemeManager::defaultAppearance();
+    vinson::SettingsDialog dialog(
+        appearance, QKeySequence(QStringLiteral("Ctrl+Alt+Space")),
+        QKeySequence(QStringLiteral("Ctrl+Alt+F")), true);
+    auto* button = dialog.findChild<QPushButton*>(
+        QStringLiteral("textColor"));
+    QVERIFY(button != nullptr);
+    QCOMPARE(button->property("swatchColor").toString(),
+             appearance.textColor.name(QColor::HexRgb));
+    QVERIFY(button->styleSheet().contains(
+        QStringLiteral("QPushButton:hover,")));
+    QVERIFY(button->styleSheet().contains(
+        QStringLiteral("background-color: %1")
+            .arg(appearance.textColor.name(QColor::HexRgb))));
+
+    dialog.show();
+    QCoreApplication::processEvents();
+    const QPoint samplePoint(8, button->height() / 2);
+    QImage normal(button->size(), QImage::Format_ARGB32_Premultiplied);
+    normal.fill(Qt::transparent);
+    button->render(&normal);
+
+    QTest::mouseMove(button, button->rect().center());
+    QCoreApplication::processEvents();
+    QImage hovered(button->size(), QImage::Format_ARGB32_Premultiplied);
+    hovered.fill(Qt::transparent);
+    button->render(&hovered);
+
+    QCOMPARE(hovered.pixelColor(samplePoint), normal.pixelColor(samplePoint));
+    QCOMPARE(hovered.pixelColor(samplePoint),
+             QColor(appearance.textColor.red(), appearance.textColor.green(),
+                    appearance.textColor.blue()));
 }
 
 QTEST_MAIN(AppearanceTest)

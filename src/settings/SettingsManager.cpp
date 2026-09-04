@@ -6,15 +6,17 @@
 #include <QColor>
 #include <QDir>
 #include <QFontDatabase>
+#include <QFileInfo>
 #include <QSettings>
 #include <QVariant>
 
 #include <cmath>
+#include <utility>
 
 namespace vinson {
 namespace {
 
-constexpr int settingsSchemaVersion = 4;
+constexpr int settingsSchemaVersion = 6;
 constexpr qsizetype maximumGeometryBytes = 64 * 1024;
 
 bool readBool(const QSettings& settings, const QString& key,
@@ -78,17 +80,15 @@ SettingsManager::SettingsManager(std::unique_ptr<QSettings> settings,
 
 ApplicationSettings SettingsManager::defaults()
 {
-    return {
-        ThemeManager::defaultAppearance(),
-        {},
-        QDir::homePath(),
-        true,
-        true,
-        false,
-        false,
-        GlobalShortcut::defaultShortcut(),
-        GlobalShortcut::defaultFocusShortcut(),
-    };
+    ApplicationSettings settings;
+    settings.appearance = ThemeManager::defaultAppearance();
+    settings.lastDirectory = QDir::homePath();
+    settings.wordWrap = true;
+    settings.lineNumbers = true;
+    settings.restoreTabsOnStartup = true;
+    settings.bossKey = GlobalShortcut::defaultShortcut();
+    settings.focusShortcut = GlobalShortcut::defaultFocusShortcut();
+    return settings;
 }
 
 ApplicationSettings SettingsManager::load() const
@@ -159,6 +159,13 @@ ApplicationSettings SettingsManager::load() const
     }
     loaded.lastDirectory = settings_->value(
         QStringLiteral("files/lastDirectory"), loaded.lastDirectory).toString();
+    loaded.recentFiles = settings_->value(
+        QStringLiteral("files/recentFiles")).toStringList();
+    loaded.openTabs = settings_->value(
+        QStringLiteral("session/openTabs")).toStringList();
+    loaded.restoreTabsOnStartup = readBool(
+        *settings_, QStringLiteral("session/restoreTabsOnStartup"),
+        loaded.restoreTabsOnStartup);
     return normalized(std::move(loaded));
 }
 
@@ -191,6 +198,10 @@ bool SettingsManager::save(const ApplicationSettings& settings)
     settings_->setValue(QStringLiteral("view/lineNumbers"), safe.lineNumbers);
     settings_->setValue(QStringLiteral("files/lastDirectory"),
                         safe.lastDirectory);
+    settings_->setValue(QStringLiteral("files/recentFiles"), safe.recentFiles);
+    settings_->setValue(QStringLiteral("session/openTabs"), safe.openTabs);
+    settings_->setValue(QStringLiteral("session/restoreTabsOnStartup"),
+                        safe.restoreTabsOnStartup);
     settings_->sync();
     return settings_->status() == QSettings::NoError;
 }
@@ -234,6 +245,48 @@ ApplicationSettings SettingsManager::normalized(ApplicationSettings settings)
     if (!QDir(settings.lastDirectory).exists()) {
         settings.lastDirectory = fallback.lastDirectory;
     }
+    QStringList recentFiles;
+    for (const QString& path : std::as_const(settings.recentFiles)) {
+        if (path.trimmed().isEmpty()) {
+            continue;
+        }
+        const QString absolutePath = QDir::cleanPath(
+            QFileInfo(path).absoluteFilePath());
+#ifdef Q_OS_WIN
+        constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseInsensitive;
+#else
+        constexpr Qt::CaseSensitivity pathCaseSensitivity = Qt::CaseSensitive;
+#endif
+        if (!recentFiles.contains(absolutePath, pathCaseSensitivity)) {
+            recentFiles.append(absolutePath);
+        }
+        if (recentFiles.size() == maximumRecentFiles) {
+            break;
+        }
+    }
+    settings.recentFiles = std::move(recentFiles);
+    QStringList openTabs;
+    for (const QString& path : std::as_const(settings.openTabs)) {
+        if (path.trimmed().isEmpty()) {
+            continue;
+        }
+        const QString absolutePath = QDir::cleanPath(
+            QFileInfo(path).absoluteFilePath());
+#ifdef Q_OS_WIN
+        constexpr Qt::CaseSensitivity tabPathCaseSensitivity =
+            Qt::CaseInsensitive;
+#else
+        constexpr Qt::CaseSensitivity tabPathCaseSensitivity =
+            Qt::CaseSensitive;
+#endif
+        if (!openTabs.contains(absolutePath, tabPathCaseSensitivity)) {
+            openTabs.append(absolutePath);
+        }
+        if (openTabs.size() == maximumRestoredTabs) {
+            break;
+        }
+    }
+    settings.openTabs = std::move(openTabs);
     if (!GlobalShortcut::isSupportedShortcut(settings.bossKey)) {
         settings.bossKey = fallback.bossKey;
     }

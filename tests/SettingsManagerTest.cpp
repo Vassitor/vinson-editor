@@ -57,6 +57,15 @@ void SettingsManagerTest::roundTripsValidatedSettings()
     expected.appearance.selectionTextColor = QColor(10, 11, 12, 255);
     expected.windowGeometry = QByteArray("geometry-state");
     expected.lastDirectory = directory.path();
+    expected.recentFiles = {
+        directory.filePath(QStringLiteral("first.txt")),
+        directory.filePath(QStringLiteral("second.txt")),
+    };
+    expected.openTabs = {
+        directory.filePath(QStringLiteral("first.txt")),
+        directory.filePath(QStringLiteral("second.txt")),
+    };
+    expected.restoreTabsOnStartup = false;
     expected.wordWrap = true;
     expected.lineNumbers = false;
     expected.alwaysOnTop = true;

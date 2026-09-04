@@ -1,5 +1,7 @@
 #include "ui/FindReplaceWidget.h"
 
+#include "settings/Appearance.h"
+
 #include <QCheckBox>
 #include <QEvent>
 #include <QHBoxLayout>
@@ -7,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QPalette>
 #include <QShortcut>
 #include <QStyle>
 #include <QVBoxLayout>
@@ -23,6 +26,8 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     , resultLabel_(new QLabel(this))
     , replacementRow_(new QWidget(this))
 {
+    setObjectName(QStringLiteral("findReplaceWidget"));
+    setAttribute(Qt::WA_StyledBackground, true);
     setFrameShape(QFrame::StyledPanel);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Maximum);
     findEdit_->setObjectName(QStringLiteral("findText"));
@@ -135,6 +140,26 @@ SearchOptions FindReplaceWidget::options() const
 {
     return {matchCaseCheck_->isChecked(), wholeWordCheck_->isChecked(),
             wrapAroundCheck_->isChecked()};
+}
+
+void FindReplaceWidget::applyAppearance(const Appearance& appearance,
+                                        bool frameless)
+{
+    QColor background = appearance.backgroundColor;
+    if (!frameless) {
+        background.setAlpha(255);
+    }
+    setProperty("findPanelBackgroundColor", background);
+    setStyleSheet(QStringLiteral(R"(
+QFrame#findReplaceWidget {
+    background: %1;
+}
+)").arg(background.name(background.alpha() == 255
+                            ? QColor::HexRgb : QColor::HexArgb)));
+
+    QPalette panelPalette = palette();
+    panelPalette.setColor(QPalette::Window, background);
+    setPalette(panelPalette);
 }
 
 void FindReplaceWidget::setResult(SearchResult result, const QString& message)
