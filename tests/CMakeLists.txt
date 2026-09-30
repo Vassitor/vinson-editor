@@ -9,6 +9,18 @@ add_executable(file_core_tests FileCoreTest.cpp)
 target_link_libraries(file_core_tests PRIVATE vinson_core Qt6::Test)
 add_test(NAME file_core_tests COMMAND file_core_tests)
 
+add_executable(document_history_tests DocumentHistoryTest.cpp)
+target_link_libraries(document_history_tests PRIVATE vinson_core Qt6::Test)
+add_test(NAME document_history_tests COMMAND document_history_tests)
+
+add_executable(file_change_monitor_tests FileChangeMonitorTest.cpp)
+target_link_libraries(file_change_monitor_tests PRIVATE vinson_core Qt6::Test)
+add_test(NAME file_change_monitor_tests COMMAND file_change_monitor_tests)
+
+add_executable(recovery_manager_tests RecoveryManagerTest.cpp)
+target_link_libraries(recovery_manager_tests PRIVATE vinson_core Qt6::Test)
+add_test(NAME recovery_manager_tests COMMAND recovery_manager_tests)
+
 add_executable(search_controller_tests SearchControllerTest.cpp)
 target_link_libraries(search_controller_tests PRIVATE vinson_editor_ui Qt6::Test)
 add_test(NAME search_controller_tests COMMAND search_controller_tests)
@@ -73,6 +85,9 @@ set_tests_properties(main_window_persistence_tests PROPERTIES
 set(vinson_test_targets
     editor_widget_tests
     file_core_tests
+    document_history_tests
+    file_change_monitor_tests
+    recovery_manager_tests
     search_controller_tests
     appearance_tests
     window_controller_tests
@@ -87,6 +102,13 @@ if(TARGET localization_tests)
 endif()
 
 if(WIN32)
+    add_test(NAME application_smoke_test
+        COMMAND $<TARGET_FILE:vinson-editor> --smoke-test)
+    set_tests_properties(application_smoke_test PROPERTIES
+        TIMEOUT 20
+        ENVIRONMENT
+            "QT_QPA_PLATFORM=offscreen;QT_QPA_PLATFORM_PLUGIN_PATH=$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>")
+
     # Keep test executables runnable both through CTest and directly from an
     # IDE. Windows does not use an RPATH for Qt DLL discovery, so relying on a
     # developer-specific PATH makes every fresh build fail before QtTest starts.

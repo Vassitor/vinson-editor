@@ -3,10 +3,12 @@
 #include <QWidget>
 
 class QLabel;
+class QHideEvent;
 class QListWidget;
 class QPaintEvent;
 class QPushButton;
 class QTimer;
+class QShowEvent;
 class QDockWidget;
 
 namespace vinson {
@@ -28,6 +30,8 @@ public slots:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
 private:
     void scheduleRefresh();
@@ -38,6 +42,7 @@ private:
     QLabel* emptyLabel_ = nullptr;
     QPushButton* restoreButton_ = nullptr;
     QTimer* refreshTimer_ = nullptr;
+    bool refreshPending_ = true;
 };
 
 } // namespace vinson

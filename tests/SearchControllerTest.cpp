@@ -4,8 +4,22 @@
 
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QSignalSpy>
 #include <QtTest>
+
+namespace {
+
+QByteArray largeSearchText(qsizetype bytes)
+{
+    QByteArray text(bytes, 'x');
+    for (qsizetype position = 63; position < bytes; position += 64) {
+        text[position] = '\n';
+    }
+    return text;
+}
+
+} // namespace
 
 class SearchControllerTest final : public QObject
 {
@@ -22,6 +36,15 @@ private slots:
     void goesToLine();
     void handlesEmptyQuery();
     void findWidgetSwitchesModeAndSubmits();
+    void findsLargeFileBoundaryMatch_data();
+    void findsLargeFileBoundaryMatch();
+    void cancelsBetweenSlicesWithoutChangingDocument();
+    void cancelsBeforeFirstSliceAndRestarts();
+    void invalidatesPendingSearch_data();
+    void invalidatesPendingSearch();
+    void finishesMissingLargeFileSearch_data();
+    void finishesMissingLargeFileSearch();
+    void findWidgetKeepsCancellationAvailable();
 };
 
 void SearchControllerTest::findsForwardAndWraps()
@@ -167,6 +190,212 @@ void SearchControllerTest::findWidgetSwitchesModeAndSubmits()
 
     widget.open(true);
     QVERIFY(widget.isReplaceMode());
+}
+
+void SearchControllerTest::findsLargeFileBoundaryMatch_data()
+{
+    QTest::addColumn<bool>("backward");
+    QTest::addColumn<bool>("wrapped");
+    QTest::newRow("forward") << false << false;
+    QTest::newRow("backward") << true << false;
+    QTest::newRow("forward-wrapped") << false << true;
+    QTest::newRow("backward-wrapped") << true << true;
+}
+
+void SearchControllerTest::findsLargeFileBoundaryMatch()
+{
+    QFETCH(bool, backward);
+    QFETCH(bool, wrapped);
+    const qint64 slice = vinson::LargeFilePolicy::responsiveSearchSlice;
+    const QByteArray needle = QStringLiteral("世界").toUtf8();
+    const qint64 position = slice - 3;
+    QByteArray text = largeSearchText(2 * slice);
+    text.replace(position, needle.size(), needle);
+    text[position - 1] = ' ';
+    text[position + needle.size()] = ' ';
+    vinson::EditorWidget editor;
+    QVERIFY(editor.beginFileLoad(vinson::LargeFileMode::Large, text.size()));
+    editor.appendTextUtf8(text);
+    editor.completeFileLoad(vinson::LineEnding::None);
+    const qint64 origin = backward != wrapped ? text.size() : 0;
+    editor.setSel(origin, origin);
+    vinson::SearchController controller(&editor);
+    controller.setSearchText(QString::fromUtf8(needle));
+    controller.setOptions({true, true, wrapped});
+    QSignalSpy results(&controller, &vinson::SearchController::resultChanged);
+
+    QCOMPARE(backward ? controller.findPrevious() : controller.findNext(),
+             vinson::SearchResult::Searching);
+    QVERIFY(controller.isSearching());
+    QTRY_VERIFY(!controller.isSearching());
+    QCOMPARE(qvariant_cast<vinson::SearchResult>(results.last().at(0)),
+             wrapped ? vinson::SearchResult::Wrapped : vinson::SearchResult::Found);
+    QCOMPARE(editor.selectionStartPosition(), position);
+    QCOMPARE(editor.selectedTextUtf8(), needle);
+}
+
+void SearchControllerTest::cancelsBetweenSlicesWithoutChangingDocument()
+{
+    const qint64 slice = vinson::LargeFilePolicy::responsiveSearchSlice;
+    QByteArray text = largeSearchText(3 * slice);
+    text.replace(text.size() - 6, 6, "needle");
+    vinson::EditorWidget editor;
+    QVERIFY(editor.beginFileLoad(vinson::LargeFileMode::Large, text.size()));
+    editor.appendTextUtf8(text);
+    editor.completeFileLoad(vinson::LineEnding::None);
+    editor.setSel(2, 5);
+    const int undoPosition = editor.currentEditHistoryPosition();
+    vinson::SearchController controller(&editor);
+    controller.setSearchText(QStringLiteral("needle"));
+    controller.setReplacementText(QStringLiteral("changed"));
+    QSignalSpy results(&controller, &vinson::SearchController::resultChanged);
+    bool cancelledAfterScan = false;
+    connect(&controller, &vinson::SearchController::progressChanged,
+            &controller, [&](int percent) {
+                if (percent > 0) {
+                    // Repeated commands cannot mutate a pending scan.
+                    QCOMPARE(controller.findPrevious(), vinson::SearchResult::Searching);
+                    QVERIFY(!controller.replaceCurrent());
+                    QCOMPARE(controller.replaceAll(), 0);
+                    QVERIFY(!controller.goToLine(1));
+                    cancelledAfterScan = true;
+                    controller.cancelSearch();
+                }
+            });
+
+    QCOMPARE(controller.findNext(), vinson::SearchResult::Searching);
+    QTRY_VERIFY(!controller.isSearching());
+    QVERIFY(cancelledAfterScan);
+    QCOMPARE(qvariant_cast<vinson::SearchResult>(results.last().at(0)),
+             vinson::SearchResult::Cancelled);
+    QCOMPARE(editor.selectionStartPosition(), 2);
+    QCOMPARE(editor.selectionEndPosition(), 5);
+    QCOMPARE(editor.currentEditHistoryPosition(), undoPosition);
+    QCOMPARE(editor.textUtf8(), text);
+    QVERIFY(!editor.modify());
+    QTest::qWait(30);
+    QCOMPARE(results.count(), 2); // No stale completion after cancellation.
+}
+
+void SearchControllerTest::cancelsBeforeFirstSliceAndRestarts()
+{
+    vinson::EditorWidget editor;
+    QVERIFY(editor.beginFileLoad(vinson::LargeFileMode::Large));
+    editor.appendTextUtf8("first needle last");
+    editor.completeFileLoad(vinson::LineEnding::None);
+    editor.setSel(0, 0);
+    vinson::SearchController controller(&editor);
+    controller.setSearchText(QStringLiteral("absent"));
+    QSignalSpy results(&controller, &vinson::SearchController::resultChanged);
+
+    QCOMPARE(controller.findNext(), vinson::SearchResult::Searching);
+    controller.cancelSearch();
+    QVERIFY(!controller.isSearching());
+    controller.setSearchText(QStringLiteral("needle"));
+    QCOMPARE(controller.findNext(), vinson::SearchResult::Searching);
+    QTRY_VERIFY(!controller.isSearching());
+    QCOMPARE(editor.selectedTextUtf8(), QByteArray("needle"));
+    QCOMPARE(qvariant_cast<vinson::SearchResult>(results.last().at(0)),
+             vinson::SearchResult::Found);
+    QTest::qWait(30);
+    QCOMPARE(results.count(), 4);
+}
+
+void SearchControllerTest::invalidatesPendingSearch_data()
+{
+    QTest::addColumn<int>("change");
+    QTest::newRow("text") << 0;
+    QTest::newRow("document") << 1;
+    QTest::newRow("query") << 2;
+    QTest::newRow("options") << 3;
+}
+
+void SearchControllerTest::invalidatesPendingSearch()
+{
+    QFETCH(int, change);
+    vinson::EditorWidget editor;
+    QVERIFY(editor.beginFileLoad(vinson::LargeFileMode::Large));
+    editor.appendTextUtf8("needle");
+    editor.completeFileLoad(vinson::LineEnding::None);
+    vinson::SearchController controller(&editor);
+    controller.setSearchText(QStringLiteral("needle"));
+    QSignalSpy results(&controller, &vinson::SearchController::resultChanged);
+    QCOMPARE(controller.findNext(), vinson::SearchResult::Searching);
+    switch (change) {
+    case 0:
+        editor.appendTextUtf8(" edit");
+        break;
+    case 1:
+        QVERIFY(editor.resetDocument());
+        editor.setTextUtf8("second"); // Same byte length as the first document.
+        break;
+    case 2:
+        controller.setSearchText(QStringLiteral("other"));
+        break;
+    default:
+        controller.setOptions({true, false, false});
+        break;
+    }
+    QTRY_VERIFY(!controller.isSearching());
+    QCOMPARE(qvariant_cast<vinson::SearchResult>(results.last().at(0)),
+             vinson::SearchResult::Cancelled);
+    QCOMPARE(results.count(), 2);
+}
+
+void SearchControllerTest::finishesMissingLargeFileSearch_data()
+{
+    findsLargeFileBoundaryMatch_data();
+}
+
+void SearchControllerTest::finishesMissingLargeFileSearch()
+{
+    QFETCH(bool, backward);
+    QFETCH(bool, wrapped);
+    const qint64 slice = vinson::LargeFilePolicy::responsiveSearchSlice;
+    vinson::EditorWidget editor;
+    QVERIFY(editor.beginFileLoad(vinson::LargeFileMode::VeryLarge, 2 * slice));
+    editor.appendTextUtf8(largeSearchText(2 * slice));
+    editor.completeFileLoad(vinson::LineEnding::None);
+    editor.setSel(slice, slice);
+    vinson::SearchController controller(&editor);
+    controller.setSearchText(QStringLiteral("absent"));
+    controller.setOptions({false, false, wrapped});
+    QSignalSpy results(&controller, &vinson::SearchController::resultChanged);
+    QSignalSpy progress(&controller, &vinson::SearchController::progressChanged);
+
+    QCOMPARE(backward ? controller.findPrevious() : controller.findNext(),
+             vinson::SearchResult::Searching);
+    QTRY_VERIFY(!controller.isSearching());
+    QCOMPARE(qvariant_cast<vinson::SearchResult>(results.last().at(0)),
+             vinson::SearchResult::NotFound);
+    QCOMPARE(editor.currentPosition(), slice);
+    int previous = 0;
+    for (const auto& update : progress) {
+        const int percent = update.at(0).toInt();
+        QVERIFY(percent >= previous && percent <= 100);
+        previous = percent;
+    }
+}
+
+void SearchControllerTest::findWidgetKeepsCancellationAvailable()
+{
+    vinson::FindReplaceWidget widget;
+    widget.open(true, QStringLiteral("needle"));
+    auto* cancel = widget.findChild<QPushButton*>(QStringLiteral("cancelSearchButton"));
+    auto* find = widget.findChild<QLineEdit*>(QStringLiteral("findText"));
+    QVERIFY(cancel);
+    QVERIFY(find);
+    QSignalSpy cancelled(&widget, &vinson::FindReplaceWidget::cancelSearchRequested);
+    widget.setSearching(true);
+    QVERIFY(cancel->isVisible());
+    QVERIFY(cancel->isEnabled());
+    QVERIFY(!find->isEnabled());
+    QTest::mouseClick(cancel, Qt::LeftButton);
+    QCOMPARE(cancelled.count(), 1);
+    widget.setSearching(false);
+    QVERIFY(cancel->isHidden());
+    QVERIFY(find->isEnabled());
+    QCOMPARE(find->text(), QStringLiteral("needle"));
 }
 
 QTEST_MAIN(SearchControllerTest)

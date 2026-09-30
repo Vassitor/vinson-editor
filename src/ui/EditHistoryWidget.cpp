@@ -4,6 +4,7 @@
 #include "settings/Appearance.h"
 
 #include <QDockWidget>
+#include <QHideEvent>
 #include <QLabel>
 #include <QLocale>
 #include <QListWidget>
@@ -12,6 +13,8 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QPalette>
+#include <QShowEvent>
+#include <QSignalBlocker>
 #include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -262,15 +265,42 @@ void EditHistoryWidget::paintEvent(QPaintEvent* event)
 
 void EditHistoryWidget::scheduleRefresh()
 {
-    refreshTimer_->start();
+    refreshPending_ = true;
+    if (isVisible()) {
+        refreshTimer_->start();
+    }
+}
+
+void EditHistoryWidget::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    if (refreshPending_) {
+        refresh();
+    }
+}
+
+void EditHistoryWidget::hideEvent(QHideEvent* event)
+{
+    refreshTimer_->stop();
+    QWidget::hideEvent(event);
 }
 
 void EditHistoryWidget::refresh()
 {
+    // Explicit refreshes (such as switching tabs or restoring an entry) also
+    // consume any queued refresh. Hidden panels rebuild when shown again.
+    refreshTimer_->stop();
+    refreshPending_ = true;
+    if (!isVisible()) {
+        return;
+    }
+    refreshPending_ = false;
+
     const int currentPosition = editor_->currentEditHistoryPosition();
     const int savedPosition = editor_->savedEditHistoryPosition();
     const QVector<EditHistoryEntry> history = editor_->editHistory();
 
+    const QSignalBlocker blocker(list_);
     list_->clear();
     auto addState = [this, currentPosition, savedPosition](
                         const QString& text, int undoPosition) {

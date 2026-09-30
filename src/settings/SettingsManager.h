@@ -4,6 +4,7 @@
 
 #include <QByteArray>
 #include <QKeySequence>
+#include <QMap>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -20,6 +21,8 @@ inline constexpr qsizetype maximumRestoredTabs = 32;
 struct ApplicationSettings
 {
     Appearance appearance;
+    QVector<AppearancePreset> appearancePresets;
+    QMap<QString, QKeySequence> shortcuts;
     QByteArray windowGeometry;
     QString lastDirectory;
     QStringList recentFiles;

@@ -2,6 +2,9 @@ param(
     [string]$Preset = "release",
     [string]$QtRoot = "",
     [string]$QtVersion = "6.8.3",
+    [ValidateSet("ZIP", "NSIS")]
+    [string]$Generator = "ZIP",
+    [string]$NsisRoot = "",
     [switch]$NoBootstrap
 )
 
@@ -308,13 +311,13 @@ function Resolve-Qt {
 }
 
 function Confirm-PackageChecksum {
-    param([string]$BuildDirectory)
+    param([string]$BuildDirectory, [string]$Extension = "zip")
 
-    $archive = Get-ChildItem -LiteralPath $BuildDirectory -Filter "*.zip" -File |
+    $archive = Get-ChildItem -LiteralPath $BuildDirectory -Filter "*.$Extension" -File |
         Sort-Object LastWriteTimeUtc -Descending |
         Select-Object -First 1
     if ($null -eq $archive) {
-        throw "CPack completed but no ZIP archive was found in $BuildDirectory."
+        throw "CPack completed but no .$Extension package was found in $BuildDirectory."
     }
 
     $checksumPath = "$($archive.FullName).sha256"
@@ -383,6 +386,27 @@ try {
         throw "This script supports Windows only."
     }
 
+    if ($Generator -eq "NSIS") {
+        $nsisCandidates = @(
+            (Join-Path $buildToolsRoot "nsis\makensis.exe"),
+            (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"),
+            (Join-Path $env:ProgramFiles "NSIS\makensis.exe")
+        )
+        if ($NsisRoot) {
+            $nsisCandidates = @((Join-Path $NsisRoot "makensis.exe"))
+            if (!(Test-Path -LiteralPath $nsisCandidates[0] -PathType Leaf)) {
+                throw "makensis.exe was not found in -NsisRoot: $NsisRoot"
+            }
+        }
+        $nsis = Resolve-Executable -Name "makensis.exe" -Candidates $nsisCandidates
+        if (!$nsis) {
+            throw "NSIS 3.03+ is required for the installer. Install NSIS from https://nsis.sourceforge.io/Download or pass -NsisRoot pointing to its extracted directory."
+        }
+        Add-PathDirectory -Directory (Split-Path -Parent $nsis)
+        Write-Host "NSIS: $(& $nsis /VERSION)"
+        if ($LASTEXITCODE -ne 0) { throw "Could not run the NSIS compiler." }
+    }
+
     $tools = Resolve-BuildTools
     Enter-MsvcEnvironment
     $resolvedQtRoot = Resolve-Qt
@@ -404,14 +428,20 @@ try {
 
     $buildDirectory = Join-Path $repositoryRoot "build\$Preset"
     $packageDirectory = New-PackageOutputDirectory -BuildDirectory $buildDirectory
-    Write-Step "Creating the portable package"
-    Invoke-Checked -Program $tools.CPack -Arguments @(
+    Write-Step "Creating the $Generator package"
+    $packageArguments = @(
         "--config", (Join-Path $buildDirectory "CPackConfig.cmake"),
+        "-G", $Generator,
         "-C", "Release",
         "-B", $packageDirectory
     )
+    if ($Generator -eq "NSIS") {
+        $packageArguments += @("-D", "CPACK_NSIS_EXECUTABLE=$nsis")
+    }
+    Invoke-Checked -Program $tools.CPack -Arguments $packageArguments
 
-    $result = Confirm-PackageChecksum -BuildDirectory $packageDirectory
+    $extension = if ($Generator -eq "NSIS") { "exe" } else { "zip" }
+    $result = Confirm-PackageChecksum -BuildDirectory $packageDirectory -Extension $extension
     Remove-PackageStagingDirectory -PackageDirectory $packageDirectory
     Write-Step "Package complete"
     Write-Host "Archive: $($result.Archive)"

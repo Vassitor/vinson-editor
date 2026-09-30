@@ -16,6 +16,7 @@ private slots:
     void migratesLegacyHorizontalScrollingDefault();
     void roundTripsValidatedSettings();
     void rejectsInvalidPersistedValues();
+    void fallbackGlobalShortcutsDoNotCollide();
 };
 
 void SettingsManagerTest::returnsDefaultsForMissingFile()
@@ -55,6 +56,27 @@ void SettingsManagerTest::roundTripsValidatedSettings()
     expected.appearance.backgroundColor = QColor(4, 5, 6, 17);
     expected.appearance.cursorColor = QColor(7, 8, 9, 255);
     expected.appearance.selectionTextColor = QColor(10, 11, 12, 255);
+    expected.appearance.font.setBold(true);
+    expected.appearance.font.setItalic(true);
+    expected.appearance.selectionBackgroundColor = QColor(13, 14, 15, 91);
+    expected.appearance.lineNumberColor = QColor(16, 17, 18, 255);
+    expected.appearance.currentLineColor = QColor(19, 20, 21, 72);
+    expected.appearance.cursorWidth = 4;
+    expected.appearance.lineSpacing = 9;
+    vinson::Appearance darkAppearance = expected.appearance;
+    darkAppearance.font.setPointSizeF(16.0);
+    darkAppearance.textColor = QColor(230, 231, 232, 91);
+    darkAppearance.backgroundColor = QColor(20, 21, 22, 127);
+    expected.appearancePresets = {
+        {QStringLiteral("Dark"), darkAppearance,
+         QKeySequence(QStringLiteral("Ctrl+Alt+1"))},
+        {QStringLiteral("Paper"), expected.appearance, {}},
+    };
+    expected.shortcuts = {
+        {QStringLiteral("findNext"), QKeySequence()},
+        {QStringLiteral("new"),
+         QKeySequence(QStringLiteral("Ctrl+Alt+N"))},
+    };
     expected.windowGeometry = QByteArray("geometry-state");
     expected.lastDirectory = directory.path();
     expected.recentFiles = {
@@ -115,13 +137,58 @@ void SettingsManagerTest::rejectsInvalidPersistedValues()
                      QStringLiteral("A"));
         raw.setValue(QStringLiteral("input/focusShortcut"),
                      QStringLiteral("A"));
+        raw.setValue(QStringLiteral("shortcuts/new"),
+                     QStringLiteral("Ctrl+K, Ctrl+C"));
+        raw.setValue(QStringLiteral("shortcuts/findNext"),
+                     QStringLiteral("F4"));
+        raw.beginWriteArray(QStringLiteral("appearancePresets"), 3);
+        raw.setArrayIndex(0);
+        raw.setValue(QStringLiteral("name"), QStringLiteral("  Valid  "));
+        raw.setValue(QStringLiteral("shortcut"),
+                     QStringLiteral("Ctrl+K, Ctrl+C"));
+        raw.setValue(QStringLiteral("appearance/fontSize"), 1000.0);
+        raw.setArrayIndex(1);
+        raw.setValue(QStringLiteral("name"), QStringLiteral("valid"));
+        raw.setArrayIndex(2);
+        raw.setValue(QStringLiteral("name"), QStringLiteral("   "));
+        raw.endArray();
         raw.setValue(QStringLiteral("files/lastDirectory"),
                      directory.filePath(QStringLiteral("missing")));
         raw.sync();
     }
 
     vinson::SettingsManager manager(path);
-    QVERIFY(manager.load() == vinson::SettingsManager::defaults());
+    vinson::ApplicationSettings loaded = manager.load();
+    QCOMPARE(loaded.appearance, vinson::SettingsManager::defaults().appearance);
+    QCOMPARE(loaded.appearancePresets.size(), 1);
+    QCOMPARE(loaded.appearancePresets.first().name, QStringLiteral("Valid"));
+    QVERIFY(loaded.appearancePresets.first().shortcut.isEmpty());
+    QVERIFY(!loaded.shortcuts.contains(QStringLiteral("new")));
+    QCOMPARE(loaded.shortcuts.value(QStringLiteral("findNext")),
+             QKeySequence(QStringLiteral("F4")));
+    QCOMPARE(loaded.appearancePresets.first().appearance.font.pointSizeF(),
+             vinson::ThemeManager::defaultAppearance().font.pointSizeF());
+}
+
+void SettingsManagerTest::fallbackGlobalShortcutsDoNotCollide()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("shortcuts.ini"));
+    const auto defaults = vinson::SettingsManager::defaults();
+    {
+        QSettings raw(path, QSettings::IniFormat);
+        raw.setValue(QStringLiteral("input/bossKey"),
+                     defaults.focusShortcut.toString(QKeySequence::PortableText));
+        raw.setValue(QStringLiteral("input/focusShortcut"), QStringLiteral("F2"));
+        raw.sync();
+    }
+    vinson::SettingsManager manager(path);
+    const auto loaded = manager.load();
+    QCOMPARE(loaded.bossKey, defaults.focusShortcut);
+    QVERIFY(loaded.focusShortcut.isEmpty());
+    QVERIFY(manager.save(loaded));
+    QCOMPARE(manager.load(), loaded);
 }
 
 QTEST_MAIN(SettingsManagerTest)

@@ -28,8 +28,24 @@ void LocalizationTest::loadsSimplifiedChineseTranslation()
              QStringLiteral("文件(&F)"));
     QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "Ready"),
              QStringLiteral("就绪"));
+    QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "&Bookmarks"),
+             QStringLiteral("书签(&B)"));
+    QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "&Next Bookmark"),
+             QStringLiteral("下一处书签(&N)"));
     QCOMPARE(QCoreApplication::translate("vinson::SettingsDialog", "Appearance"),
              QStringLiteral("外观"));
+    QCOMPARE(QCoreApplication::translate("vinson::SettingsDialog", "Custom Styles"),
+             QStringLiteral("自定义样式"));
+    QCOMPARE(QCoreApplication::translate("vinson::SettingsDialog", "Background opacity:"),
+             QStringLiteral("背景不透明度："));
+    QCOMPARE(QCoreApplication::translate("vinson::SettingsDialog", "No saved styles"),
+             QStringLiteral("暂无已保存的样式"));
+    QCOMPARE(QCoreApplication::translate(
+                 "vinson::SettingsDialog", "Application Shortcuts"),
+             QStringLiteral("应用快捷键"));
+    QCOMPARE(QCoreApplication::translate(
+                 "vinson::MainWindow", "Exit Minimal Mode"),
+             QStringLiteral("退出极简模式"));
     QCOMPARE(QCoreApplication::translate(
                  "vinson::MainWindow", "&Appearance and Shortcuts…"),
              QStringLiteral("外观和快捷键(&A)…"));

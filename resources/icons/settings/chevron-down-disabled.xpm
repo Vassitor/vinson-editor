@@ -1,0 +1,13 @@
+/* XPM */
+static const char *chevron_down_disabled[] = {
+"12 8 2 1",
+"  c None",
+". c #b6bdc9",
+"            ",
+" ..      .. ",
+"  ..    ..  ",
+"   ..  ..   ",
+"    ....    ",
+"     ..     ",
+"            ",
+"            "};

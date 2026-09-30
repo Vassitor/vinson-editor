@@ -1,4 +1,5 @@
 #include "editor/EditorWidget.h"
+#include "ui/MenuAppearance.h"
 
 #include <ScintillaTypes.h>
 
@@ -31,6 +32,20 @@ constexpr int undoActionMayCoalesce = 0x100;
 constexpr int undoActionInsert = 0;
 constexpr int undoActionDelete = 1;
 
+// Marker 0 is application-owned; folding/change-history marker slots stay free.
+constexpr sptr_t bookmarkMarker = 0;
+constexpr sptr_t bookmarkMask = sptr_t{1} << bookmarkMarker;
+constexpr sptr_t bookmarkMargin = 1;
+
+std::size_t lineNumberDigits(sptr_t lines) noexcept
+{
+    std::size_t digits = 1;
+    for (; lines >= 10; lines /= 10) {
+        ++digits;
+    }
+    return std::max<std::size_t>(3, digits);
+}
+
 QString historyPreview(const QByteArray& text)
 {
     QString preview = QString::fromUtf8(text);
@@ -60,6 +75,11 @@ EditorWidget::EditorWidget(QWidget* parent)
         static_cast<sptr_t>(Scintilla::ScaleTechnique::PixelAligned));
     setCodePage(Scintilla::CpUtf8);
     setMarginTypeN(0, static_cast<sptr_t>(Scintilla::MarginType::Number));
+    setMarginMaskN(0, 0);
+    setMarginTypeN(bookmarkMargin,
+                   static_cast<sptr_t>(Scintilla::MarginType::Symbol));
+    setMarginMaskN(bookmarkMargin, bookmarkMask);
+    setMarginSensitiveN(bookmarkMargin, true);
     setScrollWidthTracking(true);
     setWordWrapEnabled(true);
 
@@ -70,24 +90,47 @@ EditorWidget::EditorWidget(QWidget* parent)
     setBackgroundColor(QColor(250, 250, 250));
     setCursorColor(QColor(32, 33, 36));
     setSelectionTextColor(QColor(255, 255, 255));
+    setSelectionBackgroundColor(QColor(66, 133, 244, 180));
+    setLineNumberColor(QColor(112, 117, 122));
+    setCurrentLineColor(QColor(232, 240, 254, 0));
+    setCursorWidth(2);
+    setLineSpacing(0);
     setLineNumbersVisible(true);
 
     connect(this, &ScintillaEditBase::savePointChanged,
             this, &EditorWidget::documentModified);
+    connect(this, &ScintillaEditBase::marginClicked, this,
+            [this](Scintilla::Position position, Scintilla::KeyMod, int margin) {
+                if (margin == bookmarkMargin && isEnabled()) {
+                    toggleBookmarkAtLine(lineFromPosition(position) + 1);
+                }
+            });
     connect(this, &ScintillaEditBase::updateUi,
             this, [this](Scintilla::Update) { emitCursorPosition(); });
     connect(this, &ScintillaEditBase::linesAdded,
-            this, [this](Scintilla::Position) { refreshLineNumberMargin(); });
+            this, [this](Scintilla::Position added) {
+                if (!lineNumbersVisible_) {
+                    return;
+                }
+                const sptr_t lines = lineCount();
+                // The width depends on the digit count, not on every newline
+                // added by typing, replacing text, or loading a file chunk.
+                if (lineNumberDigits(lines) != lineNumberDigits(lines - added)) {
+                    refreshLineNumberMargin();
+                }
+            });
     connect(this, &ScintillaEditBase::modified, this,
-            [this](Scintilla::ModificationFlags type, Scintilla::Position,
+            [this](Scintilla::ModificationFlags type, Scintilla::Position position,
                    Scintilla::Position, Scintilla::Position,
-                   const QByteArray&, Scintilla::Position,
+                   const QByteArray& text, Scintilla::Position,
                    Scintilla::FoldLevel, Scintilla::FoldLevel) {
                 const int flags = static_cast<int>(type);
                 const int textChanges =
                     static_cast<int>(Scintilla::ModificationFlags::InsertText)
                     | static_cast<int>(Scintilla::ModificationFlags::DeleteText);
                 if ((flags & textChanges) != 0) {
+                    trackLineEndingEdit(position, text,
+                        (flags & static_cast<int>(Scintilla::ModificationFlags::InsertText)) != 0);
                     emit editHistoryChanged();
                 }
             });
@@ -95,6 +138,7 @@ EditorWidget::EditorWidget(QWidget* parent)
 
 void EditorWidget::setTextUtf8(QByteArrayView text)
 {
+    clearAllBookmarks();
     const QByteArray terminatedText(text.data(), text.size());
     setUndoCollection(false);
     setText(terminatedText.constData());
@@ -164,6 +208,7 @@ bool EditorWidget::resetDocument()
     setReadOnly(false);
     setUndoCollection(false);
     clearAll();
+    setInsertionLineEnding(LineEnding::None);
     emptyUndoBuffer();
     setUndoCollection(true);
     setSavePoint();
@@ -173,6 +218,16 @@ bool EditorWidget::resetDocument()
 }
 
 void EditorWidget::completeFileLoad(LineEnding lineEnding)
+{
+    setInsertionLineEnding(lineEnding);
+    emptyUndoBuffer();
+    setUndoCollection(true);
+    setSavePoint();
+    setEnabled(true);
+    refreshLineNumberMargin();
+}
+
+void EditorWidget::setInsertionLineEnding(LineEnding lineEnding)
 {
     const Scintilla::EndOfLine scintillaEol = [lineEnding] {
         switch (lineEnding) {
@@ -194,16 +249,68 @@ void EditorWidget::completeFileLoad(LineEnding lineEnding)
     }();
 
     setEOLMode(static_cast<sptr_t>(scintillaEol));
-    emptyUndoBuffer();
-    setUndoCollection(true);
-    setSavePoint();
-    setEnabled(true);
-    refreshLineNumberMargin();
+}
+
+void EditorWidget::convertLineEndings(LineEnding lineEnding)
+{
+    if (lineEnding != LineEnding::Lf && lineEnding != LineEnding::CrLf
+        && lineEnding != LineEnding::Cr) {
+        return;
+    }
+    setInsertionLineEnding(lineEnding);
+    beginUndoAction();
+    convertEOLs(eOLMode());
+    endUndoAction();
+}
+
+LineEnding EditorWidget::detectedLineEnding() const
+{
+    const auto counts = lineEndingCounts_.value(docPointer());
+    const bool cr = counts.cr > counts.pairs;
+    const bool lf = counts.lf > counts.pairs;
+    const bool crlf = counts.pairs > 0;
+    if (static_cast<int>(cr) + static_cast<int>(lf) + static_cast<int>(crlf) > 1)
+        return LineEnding::Mixed;
+    return crlf ? LineEnding::CrLf : cr ? LineEnding::Cr : lf ? LineEnding::Lf : LineEnding::None;
+}
+
+void EditorWidget::trackLineEndingEdit(qint64 position, const QByteArray& text, bool inserted)
+{
+    if (text.isEmpty()) return;
+    const LineEnding previous = detectedLineEnding();
+    auto& counts = lineEndingCounts_[docPointer()];
+    const auto pair = [](char left, char right) -> qint64 {
+        return left == '\r' && right == '\n' ? 1 : 0;
+    };
+    const char left = position > 0 ? static_cast<char>(charAt(position - 1)) : '\0';
+    const qint64 rightPosition = position + (inserted ? text.size() : 0);
+    const char right = rightPosition < documentLength()
+        ? static_cast<char>(charAt(rightPosition)) : '\0';
+    // Count pairs inside the changed text and across its two boundaries,
+    // replacing the pair that existed (or now exists) across the gap.
+    qint64 pairs = pair(left, text.front()) + pair(text.back(), right) - pair(left, right);
+    for (qsizetype i = 1; i < text.size(); ++i) pairs += pair(text[i - 1], text[i]);
+    const qint64 sign = inserted ? 1 : -1;
+    counts.cr += sign * text.count('\r');
+    counts.lf += sign * text.count('\n');
+    counts.pairs += sign * pairs;
+    const LineEnding current = detectedLineEnding();
+    if (current != previous) emit lineEndingChanged(current);
 }
 
 void EditorWidget::markSaved()
 {
     setSavePoint();
+}
+
+void EditorWidget::markRecovered()
+{
+    const sptr_t end = textLength();
+    beginUndoAction();
+    setSel(end, end);
+    addText(1, " ");
+    deleteRange(end, 1);
+    endUndoAction();
 }
 
 bool EditorWidget::isEmpty() const
@@ -230,8 +337,10 @@ sptr_t EditorWidget::retainCurrentDocument()
 
 sptr_t EditorWidget::createTabDocument()
 {
-    return createDocument(
+    const sptr_t document = createDocument(
         0, static_cast<sptr_t>(Scintilla::DocumentOption::Default));
+    lineEndingCounts_.insert(document, {});
+    return document;
 }
 
 void EditorWidget::activateTabDocument(sptr_t document, LargeFileMode mode)
@@ -244,6 +353,7 @@ void EditorWidget::activateTabDocument(sptr_t document, LargeFileMode mode)
     setILexer(0);
     largeFileMode_ = mode;
     refreshLineNumberMargin();
+    emit bookmarksChanged();
     emitCursorPosition();
     viewport()->update();
 }
@@ -251,6 +361,7 @@ void EditorWidget::activateTabDocument(sptr_t document, LargeFileMode mode)
 void EditorWidget::releaseTabDocument(sptr_t document)
 {
     if (document != 0) {
+        lineEndingCounts_.remove(document);
         releaseDocument(document);
     }
 }
@@ -336,6 +447,45 @@ void EditorWidget::setSelectionTextColor(const QColor& color)
     setSelFore(true, scintillaColor(selectionTextColor_));
 }
 
+void EditorWidget::setSelectionBackgroundColor(const QColor& color)
+{
+    selectionBackgroundColor_ = color;
+    setSelBack(true, scintillaColor(selectionBackgroundColor_));
+    setSelAlpha(selectionBackgroundColor_.alpha());
+    markerSetBack(bookmarkMarker, scintillaColor(selectionBackgroundColor_));
+}
+
+void EditorWidget::setLineNumberColor(const QColor& color)
+{
+    lineNumberColor_ = color;
+    lineNumberColor_.setAlpha(255);
+    restoreLineNumberStyle();
+    markerSetFore(bookmarkMarker, scintillaColor(lineNumberColor_));
+}
+
+void EditorWidget::setCurrentLineColor(const QColor& color)
+{
+    currentLineColor_ = color;
+    setCaretLineVisible(currentLineColor_.alpha() > 0);
+    setCaretLineBack(scintillaColor(currentLineColor_));
+    setCaretLineBackAlpha(currentLineColor_.alpha());
+}
+
+void EditorWidget::setCursorWidth(int width)
+{
+    cursorWidth_ = std::clamp(width, 1, 5);
+    setCaretWidth(cursorWidth_);
+}
+
+void EditorWidget::setLineSpacing(int spacing)
+{
+    lineSpacing_ = std::clamp(spacing, 0, 20);
+    setExtraAscent(lineSpacing_ / 2);
+    setExtraDescent(lineSpacing_ - lineSpacing_ / 2);
+    refreshLineNumberMargin();
+    updateGeometry();
+}
+
 const QFont& EditorWidget::editorFont() const noexcept
 {
     return editorFont_;
@@ -361,6 +511,31 @@ const QColor& EditorWidget::selectionTextColor() const noexcept
     return selectionTextColor_;
 }
 
+const QColor& EditorWidget::selectionBackgroundColor() const noexcept
+{
+    return selectionBackgroundColor_;
+}
+
+const QColor& EditorWidget::lineNumberColor() const noexcept
+{
+    return lineNumberColor_;
+}
+
+const QColor& EditorWidget::currentLineColor() const noexcept
+{
+    return currentLineColor_;
+}
+
+int EditorWidget::cursorWidth() const noexcept
+{
+    return cursorWidth_;
+}
+
+int EditorWidget::lineSpacing() const noexcept
+{
+    return lineSpacing_;
+}
+
 void EditorWidget::setWordWrapEnabled(bool enabled)
 {
     setWrapMode(static_cast<sptr_t>(enabled ? Scintilla::Wrap::Word
@@ -376,6 +551,10 @@ bool EditorWidget::isWordWrapEnabled() const
 void EditorWidget::setLineNumbersVisible(bool visible)
 {
     lineNumbersVisible_ = visible;
+    // An undisplayed non-empty marker would tint the entire text line.
+    // Hide its symbol as well as its margin for decoration-free minimal mode.
+    markerDefine(bookmarkMarker, static_cast<sptr_t>(visible
+        ? Scintilla::MarkerSymbol::Bookmark : Scintilla::MarkerSymbol::Empty));
     refreshLineNumberMargin();
 }
 
@@ -564,6 +743,64 @@ bool EditorWidget::goToOneBasedLine(qint64 line)
     return true;
 }
 
+bool EditorWidget::hasBookmarkAtLine(qint64 oneBasedLine) const
+{
+    if (oneBasedLine < 1 || oneBasedLine > editorLineCount()) {
+        return false;
+    }
+    auto* self = const_cast<EditorWidget*>(this);
+    return (self->markerGet(static_cast<sptr_t>(oneBasedLine - 1))
+            & bookmarkMask) != 0;
+}
+
+bool EditorWidget::toggleBookmarkAtLine(qint64 oneBasedLine)
+{
+    if (oneBasedLine < 1 || oneBasedLine > editorLineCount()) {
+        return false;
+    }
+    const sptr_t line = static_cast<sptr_t>(oneBasedLine - 1);
+    const bool enabled = !hasBookmarkAtLine(oneBasedLine);
+    if (enabled) {
+        if (markerAdd(line, bookmarkMarker) < 0) {
+            return false;
+        }
+    } else {
+        markerDelete(line, bookmarkMarker);
+    }
+    emit bookmarksChanged();
+    emit bookmarkToggled(oneBasedLine, enabled);
+    return true;
+}
+
+void EditorWidget::clearAllBookmarks()
+{
+    markerDeleteAll(bookmarkMarker);
+    emit bookmarksChanged();
+}
+
+bool EditorWidget::goToNextBookmark()
+{
+    return goToBookmark(true);
+}
+
+bool EditorWidget::goToPreviousBookmark()
+{
+    return goToBookmark(false);
+}
+
+bool EditorWidget::goToBookmark(bool forward)
+{
+    const sptr_t line = static_cast<sptr_t>(currentOneBasedLine() - 1);
+    sptr_t target = forward ? markerNext(line + 1, bookmarkMask)
+        : (line > 0 ? markerPrevious(line - 1, bookmarkMask) : -1);
+    if (target < 0) {
+        target = forward ? markerNext(0, bookmarkMask)
+            : markerPrevious(static_cast<sptr_t>(editorLineCount() - 1),
+                             bookmarkMask);
+    }
+    return target >= 0 && goToOneBasedLine(target + 1);
+}
+
 QVector<EditHistoryEntry> EditorWidget::editHistory() const
 {
     QVector<EditHistoryEntry> entries;
@@ -661,6 +898,8 @@ QSize EditorWidget::minimumSizeHint() const
 void EditorWidget::contextMenuEvent(QContextMenuEvent* event)
 {
     QMenu menu(this);
+    menu.setObjectName(QStringLiteral("editorContextMenu"));
+    applyMenuAppearance(&menu);
     auto* undoAction = menu.addAction(tr("Undo"), this, &ScintillaEdit::undo);
     auto* redoAction = menu.addAction(tr("Redo"), this, &ScintillaEdit::redo);
     undoAction->setEnabled(canUndo());
@@ -721,9 +960,11 @@ void EditorWidget::restoreLineNumberStyle()
 {
     const auto lineNumberStyle =
         styleIndex(Scintilla::StylesCommon::LineNumber);
-    if (textColor_.isValid()) {
+    if (lineNumberColor_.isValid()) {
         styleSetFore(lineNumberStyle,
-                     scintillaRgbaStyleColor(textColor_));
+                     scintillaRgbaStyleColor(lineNumberColor_));
+    } else if (textColor_.isValid()) {
+        styleSetFore(lineNumberStyle, scintillaRgbaStyleColor(textColor_));
     }
     if (backgroundColor_.isValid()) {
         styleSetBack(lineNumberStyle,
@@ -752,6 +993,8 @@ bool EditorWidget::replaceDocument(LargeFileMode mode, qint64 initialBytes)
         return false;
     }
 
+    lineEndingCounts_.insert(document, {});
+
     // SETDOCPOINTER takes its own reference. Release the creator's reference
     // immediately so the editor is the sole owner of this document.
     setDocPointer(document);
@@ -759,19 +1002,19 @@ bool EditorWidget::replaceDocument(LargeFileMode mode, qint64 initialBytes)
     setCodePage(Scintilla::CpUtf8);
     setILexer(0);
     largeFileMode_ = mode;
+    emit bookmarksChanged();
     return true;
 }
 
 void EditorWidget::refreshLineNumberMargin()
 {
+    setMarginWidthN(bookmarkMargin, lineNumbersVisible_ ? 16 : 0);
     if (!lineNumbersVisible_) {
         setMarginWidthN(0, 0);
         return;
     }
 
-    const auto lines = std::max<sptr_t>(lineCount(), 1);
-    const auto digits = std::max<std::size_t>(3, std::to_string(lines).size());
-    const std::string sample(digits, '9');
+    const std::string sample(lineNumberDigits(lineCount()), '9');
     const auto width = textWidth(styleIndex(Scintilla::StylesCommon::LineNumber),
                                  sample.c_str()) + 12;
     setMarginWidthN(0, width);

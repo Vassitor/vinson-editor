@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/icons">
         <file alias="icon.svg">icons/icon.svg</file>
+        <file alias="vinson-editor.ico">icons/vinson-editor.ico</file>
     </qresource>
 </RCC>

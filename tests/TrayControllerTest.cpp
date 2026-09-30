@@ -88,11 +88,12 @@ void TrayControllerTest::exposesContextMenuActions()
         QStringLiteral("systemTrayIcon"));
     QVERIFY(trayIcon != nullptr);
     QVERIFY(trayIcon->contextMenu() != nullptr);
-    QVERIFY(!trayIcon->contextMenu()->windowFlags().testFlag(
-        Qt::NoDropShadowWindowHint));
-    QVERIFY(!trayIcon->contextMenu()->testAttribute(
-        Qt::WA_TranslucentBackground));
+    trayIcon->contextMenu()->ensurePolished();
+    QVERIFY(trayIcon->contextMenu()->findChild<QObject*>(
+        QStringLiteral("nativeMenuAppearance"), Qt::FindDirectChildrenOnly));
     QVERIFY(trayIcon->contextMenu()->graphicsEffect() == nullptr);
+    QVERIFY(!trayIcon->contextMenu()->testAttribute(Qt::WA_TranslucentBackground));
+    QVERIFY(!trayIcon->contextMenu()->windowFlags().testFlag(Qt::NoDropShadowWindowHint));
     QVERIFY(trayIcon->contextMenu()->actions().contains(toggle));
     QVERIFY(trayIcon->contextMenu()->actions().contains(settings));
     QVERIFY(trayIcon->contextMenu()->actions().contains(bossKey));

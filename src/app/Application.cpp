@@ -22,7 +22,13 @@ Application::Application(int& argc, char** argv)
     QCoreApplication::setOrganizationName(QStringLiteral("VinsonEditor"));
     QCoreApplication::setApplicationName(QStringLiteral("Vinson Editor"));
     QCoreApplication::setApplicationVersion(QStringLiteral(VINSON_APP_VERSION));
+    // Use the multi-resolution Windows icon for native taskbar integration.
+    // Other platforms retain the resolution-independent SVG resource.
+#if defined(Q_OS_WIN)
+    setWindowIcon(QIcon(QStringLiteral(":/icons/vinson-editor.ico")));
+#else
     setWindowIcon(QIcon(QStringLiteral(":/icons/icon.svg")));
+#endif
 
     QLocale interfaceLocale = QLocale::system();
     const QString languageOption = QStringLiteral("--language=");
@@ -55,7 +61,9 @@ int Application::run()
             return 1;
         }
     }
-    MainWindow mainWindow;
+    MainWindow mainWindow(nullptr, !smokeTest);
+    mainWindow.setProperty("skipCrashRecovery", smokeTest);
+    mainWindow.setWindowIcon(windowIcon());
     if (singleInstance_ != nullptr) {
         connect(singleInstance_, &SingleInstance::openRequested,
                 &mainWindow, &MainWindow::handleExternalOpenRequest);
@@ -82,8 +90,10 @@ int Application::run()
             &TrayController::focusShortcutRegistrationFailed,
             &mainWindow,
             &MainWindow::handleFocusShortcutRegistrationFailure);
+    // The window has already confirmed every unsaved tab. QApplication::quit()
+    // would try closing it again, and its close-to-tray handler could veto quit.
     connect(&mainWindow, &MainWindow::applicationQuitAccepted,
-            this, &QCoreApplication::quit);
+            this, [] { QCoreApplication::exit(0); });
     if (!smokeTest) {
         (void)trayController.setBossKey(mainWindow.bossKey());
         (void)trayController.setFocusShortcut(mainWindow.focusShortcut());
@@ -96,9 +106,10 @@ int Application::run()
     mainWindow.openFiles(startupPaths);
 
     // The smoke mode exercises native widget creation in CI without leaving
-    // an interactive application running indefinitely.
+    // an interactive application running indefinitely. exit() avoids the
+    // MainWindow close handler that intentionally ignores a plain close.
     if (smokeTest) {
-        QTimer::singleShot(100, this, &QCoreApplication::quit);
+        QTimer::singleShot(100, this, [] { QCoreApplication::exit(0); });
     }
 
     return exec();

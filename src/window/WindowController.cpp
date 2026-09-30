@@ -294,21 +294,6 @@ bool WindowController::eventFilter(QObject* watched, QEvent* event)
         return QObject::eventFilter(watched, event);
     }
 
-    if (event->type() == QEvent::KeyPress) {
-        const auto* keyEvent = static_cast<QKeyEvent*>(event);
-        const Qt::KeyboardModifiers minimalShortcut =
-            Qt::ControlModifier | Qt::ShiftModifier;
-        if (editor_ != nullptr && keyEvent->key() == Qt::Key_M
-            && keyEvent->modifiers().testFlags(minimalShortcut)) {
-            toggleMinimalMode();
-            return true;
-        }
-        if (minimalMode_ && keyEvent->key() == Qt::Key_Escape) {
-            setMinimalMode(false);
-            return true;
-        }
-    }
-
     if (!frameless_) {
         return QObject::eventFilter(watched, event);
     }

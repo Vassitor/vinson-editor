@@ -61,6 +61,11 @@ Appearance ThemeManager::defaultAppearance()
         QColor(250, 250, 250, 255),
         QColor(32, 33, 36),
         QColor(255, 255, 255),
+        QColor(66, 133, 244, 180),
+        QColor(112, 117, 122),
+        QColor(232, 240, 254, 0),
+        2,
+        0,
     };
 }
 
@@ -77,6 +82,11 @@ void ThemeManager::applyAppearance(const Appearance& appearance)
     editor_->setBackgroundColor(paintedBackgroundColor());
     editor_->setCursorColor(appearance_.cursorColor);
     editor_->setSelectionTextColor(appearance_.selectionTextColor);
+    editor_->setSelectionBackgroundColor(appearance_.selectionBackgroundColor);
+    editor_->setLineNumberColor(appearance_.lineNumberColor);
+    editor_->setCurrentLineColor(appearance_.currentLineColor);
+    editor_->setCursorWidth(appearance_.cursorWidth);
+    editor_->setLineSpacing(appearance_.lineSpacing);
 
     applyScrollBarAppearance();
     applyWindowAppearance();
@@ -204,7 +214,8 @@ void ThemeManager::applyWindowAppearance()
                          chromeText);
     }
     window_->setPalette(palette);
-    window_->setAutoFillBackground(!framelessMode_);
+    window_->setAutoFillBackground(!framelessMode_
+        && !window_->property("nativeTitleBarActive").toBool());
     // Whole-window opacity also fades text, line numbers, menus, and the
     // caret. Transparency is represented only by painted background pixels.
     window_->setWindowOpacity(1.0);
@@ -233,7 +244,9 @@ void ThemeManager::applyNativeWindowAppearance()
         return;
     }
     (void)setNativeBackgroundAlphaEnabled(window_, framelessMode_);
-    applyNativeTitleBarColors(window_, paintedBackgroundColor(),
+    applyNativeTitleBarColors(window_, window_->property("nativeTitleBarActive").toBool()
+                                  ? titleBarBackground(paintedBackgroundColor())
+                                  : paintedBackgroundColor(),
                               opaqueColor(appearance_.textColor));
 }
 
@@ -258,8 +271,20 @@ Appearance ThemeManager::normalized(Appearance appearance)
     if (!appearance.selectionTextColor.isValid()) {
         appearance.selectionTextColor = defaults.selectionTextColor;
     }
+    if (!appearance.selectionBackgroundColor.isValid()) {
+        appearance.selectionBackgroundColor = defaults.selectionBackgroundColor;
+    }
+    if (!appearance.lineNumberColor.isValid()) {
+        appearance.lineNumberColor = defaults.lineNumberColor;
+    }
+    if (!appearance.currentLineColor.isValid()) {
+        appearance.currentLineColor = defaults.currentLineColor;
+    }
     appearance.cursorColor.setAlpha(255);
     appearance.selectionTextColor.setAlpha(255);
+    appearance.lineNumberColor.setAlpha(255);
+    appearance.cursorWidth = std::clamp(appearance.cursorWidth, 1, 5);
+    appearance.lineSpacing = std::clamp(appearance.lineSpacing, 0, 20);
     return appearance;
 }
 

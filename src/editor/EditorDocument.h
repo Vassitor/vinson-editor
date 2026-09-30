@@ -12,6 +12,8 @@ public:
     void reset();
     void adoptLoadedFile(const FileLoadInfo& info);
     void adoptSavedFile(const FileSaveResult& result);
+    void adoptRecoveredFile(const QString& path, TextEncoding encoding,
+                            LineEnding lineEnding, qint64 fileSize);
 
     [[nodiscard]] const QString& path() const noexcept;
     [[nodiscard]] QString displayName() const;
@@ -22,10 +24,13 @@ public:
     [[nodiscard]] qint64 fileSize() const noexcept;
 
     void setModified(bool modified) noexcept;
+    void setEncoding(TextEncoding encoding) noexcept;
+    void setLineEnding(LineEnding lineEnding) noexcept;
 
 private:
     QString path_;
     TextEncoding encoding_ = TextEncoding::Utf8;
+    TextEncoding savedEncoding_ = TextEncoding::Utf8;
     LineEnding lineEnding_ = LineEnding::None;
     qint64 fileSize_ = 0;
     bool modified_ = false;

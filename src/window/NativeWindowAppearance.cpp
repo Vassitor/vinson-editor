@@ -9,6 +9,10 @@
 #endif
 
 namespace vinson {
+QColor titleBarBackground(const QColor& editorBackground)
+{
+    return editorBackground.lightness() < 128 ? QColor(48, 48, 48) : QColor(235, 235, 235);
+}
 
 void applyNativeTitleBarColors(QWidget* window, const QColor& background,
                                const QColor& text)

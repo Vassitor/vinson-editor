@@ -1,10 +1,14 @@
 #include "editor/EditorWidget.h"
 #include "settings/ThemeManager.h"
+#include "settings/AppearanceIO.h"
 #include "ui/SettingsDialog.h"
 #include "window/NativeWindowAppearance.h"
 
 #include <QImage>
 #include <QDoubleSpinBox>
+#include <QComboBox>
+#include <QCheckBox>
+#include <QDialogButtonBox>
 #include <QGroupBox>
 #include <QMainWindow>
 #include <QKeySequenceEdit>
@@ -14,8 +18,10 @@
 #include <QScrollBar>
 #include <QSignalSpy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QStatusBar>
 #include <QTabWidget>
+#include <QTableWidget>
 #include <QVBoxLayout>
 #include <QtTest>
 
@@ -36,6 +42,11 @@ private slots:
     void nativeFramedBackgroundAlphaIsAvailable();
     void dialogPreviewsBackgroundAlpha();
     void colorSwatchesKeepTheirColorOnHover();
+    void managesCustomAppearancePresets();
+    void restoresDefaultsWithoutDeletingSavedStyles();
+    void reappliesSelectedPresetAfterEditing();
+    void saturatedSwatchesHaveReadableText();
+    void roundTripsAppearanceJson();
 };
 
 void AppearanceTest::appliesAppearanceWithoutChangingDocument()
@@ -56,6 +67,11 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     appearance.backgroundColor = QColor(40, 50, 60, 127);
     appearance.cursorColor = QColor(70, 80, 90, 20);
     appearance.selectionTextColor = QColor(100, 110, 120, 30);
+    appearance.selectionBackgroundColor = QColor(12, 34, 56, 78);
+    appearance.lineNumberColor = QColor(90, 91, 92, 20);
+    appearance.currentLineColor = QColor(120, 121, 122, 64);
+    appearance.cursorWidth = 4;
+    appearance.lineSpacing = 8;
 
     manager.applyAppearance(appearance);
 
@@ -68,6 +84,11 @@ void AppearanceTest::appliesAppearanceWithoutChangingDocument()
     QCOMPARE(editor->backgroundColor(), QColor(40, 50, 60, 255));
     QCOMPARE(editor->cursorColor(), QColor(70, 80, 90, 255));
     QCOMPARE(editor->selectionTextColor(), QColor(100, 110, 120, 255));
+    QCOMPARE(editor->selectionBackgroundColor(), QColor(12, 34, 56, 78));
+    QCOMPARE(editor->lineNumberColor(), QColor(90, 91, 92, 255));
+    QCOMPARE(editor->currentLineColor(), QColor(120, 121, 122, 64));
+    QCOMPARE(editor->cursorWidth(), 4);
+    QCOMPARE(editor->lineSpacing(), 8);
     QCOMPARE(window.palette().color(QPalette::Window), QColor(40, 50, 60, 255));
     QCOMPARE(window.windowOpacity(), 1.0);
     QVERIFY(editor->bufferedDraw());
@@ -344,9 +365,31 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
     QVERIFY(dialog.findChild<QGroupBox*>(
         QStringLiteral("transparencyGroup")) != nullptr);
     QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("appearancePresetsGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QGroupBox*>(
         QStringLiteral("shortcutsGroup")) != nullptr);
     QVERIFY(dialog.findChild<QGroupBox*>(
+        QStringLiteral("applicationShortcutsGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QGroupBox*>(
         QStringLiteral("sessionGroup")) != nullptr);
+    QVERIFY(dialog.findChild<QCheckBox*>(QStringLiteral("fontBold")) != nullptr);
+    QVERIFY(dialog.findChild<QCheckBox*>(QStringLiteral("fontItalic")) != nullptr);
+    QVERIFY(dialog.findChild<QSpinBox*>(QStringLiteral("cursorWidth")) != nullptr);
+    QVERIFY(dialog.findChild<QSpinBox*>(QStringLiteral("lineSpacing")) != nullptr);
+    QVERIFY(dialog.findChild<QPushButton*>(
+        QStringLiteral("selectionBackgroundColor")) != nullptr);
+    QVERIFY(dialog.findChild<QSpinBox*>(
+        QStringLiteral("selectionBackgroundAlpha")) != nullptr);
+    QVERIFY(dialog.findChild<QPushButton*>(
+        QStringLiteral("lineNumberColor")) != nullptr);
+    QVERIFY(dialog.findChild<QPushButton*>(
+        QStringLiteral("currentLineColor")) != nullptr);
+    QVERIFY(dialog.findChild<QSpinBox*>(
+        QStringLiteral("currentLineAlpha")) != nullptr);
+    QVERIFY(dialog.findChild<QPushButton*>(
+        QStringLiteral("importAppearance")) != nullptr);
+    QVERIFY(dialog.findChild<QPushButton*>(
+        QStringLiteral("exportAppearance")) != nullptr);
     QVERIFY(dialog.restoreTabsOnStartup());
     const QColor categoryText =
         dialog.property("categoryTextColor").value<QColor>();
@@ -356,6 +399,8 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
     QVERIFY(categoryBorder.isValid());
     const QColor dialogBackground = dialog.palette().color(QPalette::Window);
     const QColor dialogText = dialog.palette().color(QPalette::WindowText);
+    QCOMPARE(dialogBackground, QColor(Qt::white));
+    QCOMPARE(dialog.palette().color(QPalette::Base), QColor(Qt::white));
     auto colorDistance = [](const QColor& first, const QColor& second) {
         return std::abs(first.red() - second.red())
             + std::abs(first.green() - second.green())
@@ -396,6 +441,71 @@ void AppearanceTest::dialogPreviewsBackgroundAlpha()
         QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
     QCOMPARE(dialog.focusShortcut(),
              QKeySequence(QStringLiteral("Ctrl+Alt+F11")));
+
+    dialog.setShortcutBindings({
+        {QStringLiteral("new"), QStringLiteral("New"),
+         QKeySequence(QStringLiteral("Ctrl+N"))},
+        {QStringLiteral("findNext"), QStringLiteral("Find Next"),
+         QKeySequence(QStringLiteral("F3"))},
+    });
+    auto* shortcutTable = dialog.findChild<QTableWidget*>(
+        QStringLiteral("applicationShortcuts"));
+    auto* newShortcut = dialog.findChild<QKeySequenceEdit*>(
+        QStringLiteral("shortcut_new"));
+    QVERIFY(shortcutTable != nullptr);
+    QCOMPARE(shortcutTable->rowCount(), 2);
+    QVERIFY(newShortcut != nullptr);
+    newShortcut->setKeySequence(QKeySequence(QStringLiteral("Ctrl+Alt+N")));
+    QCOMPARE(dialog.shortcutBindings().first().shortcut,
+             QKeySequence(QStringLiteral("Ctrl+Alt+N")));
+}
+
+void AppearanceTest::managesCustomAppearancePresets()
+{
+    vinson::Appearance first = vinson::ThemeManager::defaultAppearance();
+    vinson::Appearance second = first;
+    second.font.setPointSizeF(19.0);
+    second.backgroundColor = QColor(10, 20, 30, 80);
+    vinson::SettingsDialog dialog(
+        first, QKeySequence(QStringLiteral("Ctrl+Alt+Space")),
+        QKeySequence(QStringLiteral("Ctrl+Alt+F")), true);
+    dialog.setAppearancePresets({
+        {QStringLiteral("First"), first,
+         QKeySequence(QStringLiteral("Ctrl+Alt+1"))},
+        {QStringLiteral("Second"), second, {}},
+    });
+
+    auto* presets = dialog.findChild<QComboBox*>(
+        QStringLiteral("appearancePreset"));
+    auto* shortcut = dialog.findChild<QKeySequenceEdit*>(
+        QStringLiteral("appearancePresetShortcut"));
+    auto* update = dialog.findChild<QPushButton*>(
+        QStringLiteral("updateAppearancePreset"));
+    auto* remove = dialog.findChild<QPushButton*>(
+        QStringLiteral("deleteAppearancePreset"));
+    QVERIFY(presets != nullptr);
+    QVERIFY(shortcut != nullptr);
+    QVERIFY(update != nullptr);
+    QVERIFY(remove != nullptr);
+    QCOMPARE(presets->count(), 2);
+
+    QSignalSpy previewSpy(&dialog, &vinson::SettingsDialog::previewChanged);
+    presets->setCurrentIndex(1);
+    QCOMPARE(dialog.appearance(), second);
+    QCOMPARE(previewSpy.count(), 1);
+    shortcut->setKeySequence(QKeySequence(QStringLiteral("Ctrl+Alt+2")));
+    QCOMPARE(dialog.appearancePresets().at(1).shortcut,
+             QKeySequence(QStringLiteral("Ctrl+Alt+2")));
+
+    vinson::Appearance updated = second;
+    updated.font.setPointSizeF(21.0);
+    dialog.setAppearance(updated);
+    update->click();
+    QCOMPARE(dialog.appearancePresets().at(1).appearance, updated);
+
+    remove->click();
+    QCOMPARE(dialog.appearancePresets().size(), 1);
+    QCOMPARE(presets->count(), 1);
 }
 
 void AppearanceTest::colorSwatchesKeepTheirColorOnHover()
@@ -433,6 +543,102 @@ void AppearanceTest::colorSwatchesKeepTheirColorOnHover()
     QCOMPARE(hovered.pixelColor(samplePoint),
              QColor(appearance.textColor.red(), appearance.textColor.green(),
                     appearance.textColor.blue()));
+}
+
+void AppearanceTest::restoresDefaultsWithoutDeletingSavedStyles()
+{
+    auto appearance = vinson::ThemeManager::defaultAppearance();
+    appearance.font.setPointSizeF(24.0);
+    vinson::SettingsDialog dialog(appearance, QKeySequence("Ctrl+Shift+F12"),
+                                  QKeySequence("Ctrl+Alt+F11"), false);
+    const QVector<vinson::AppearancePreset> presets = {
+        {QStringLiteral("My style"), appearance, QKeySequence("Ctrl+Alt+1")}};
+    dialog.setAppearancePresets(presets);
+    dialog.setShortcutBindings({
+        {QStringLiteral("new"), QStringLiteral("New"), QKeySequence("Ctrl+Alt+N"),
+         QKeySequence::New},
+        {QStringLiteral("custom"), QStringLiteral("No default"), QKeySequence("F8"), {}}});
+    QSignalSpy preview(&dialog, &vinson::SettingsDialog::previewChanged);
+    auto* buttons = dialog.findChild<QDialogButtonBox*>();
+    QVERIFY(buttons != nullptr);
+    buttons->button(QDialogButtonBox::RestoreDefaults)->click();
+    QCOMPARE(dialog.appearance(), vinson::ThemeManager::defaultAppearance());
+    QVERIFY(dialog.restoreTabsOnStartup());
+    QCOMPARE(dialog.shortcutBindings().first().shortcut, QKeySequence(QKeySequence::New));
+    QVERIFY(dialog.shortcutBindings().last().shortcut.isEmpty());
+    QCOMPARE(dialog.appearancePresets(), presets);
+    QCOMPARE(preview.count(), 1);
+    auto* editor = dialog.findChild<QKeySequenceEdit*>(QStringLiteral("shortcut_new"));
+    QVERIFY(editor != nullptr);
+    QCOMPARE(editor->keySequence(), QKeySequence(QKeySequence::New));
+    editor->setKeySequence(QKeySequence("Ctrl+Shift+N"));
+    QCOMPARE(dialog.shortcutBindings().first().shortcut, QKeySequence("Ctrl+Shift+N"));
+}
+
+void AppearanceTest::reappliesSelectedPresetAfterEditing()
+{
+    const auto appearance = vinson::ThemeManager::defaultAppearance();
+    vinson::SettingsDialog dialog(appearance, {}, {}, true);
+    dialog.setAppearancePresets({{QStringLiteral("Saved"), appearance, {}}});
+    auto* combo = dialog.findChild<QComboBox*>(QStringLiteral("appearancePreset"));
+    auto* update = dialog.findChild<QPushButton*>(QStringLiteral("updateAppearancePreset"));
+    auto* size = dialog.findChild<QDoubleSpinBox*>(QStringLiteral("fontSize"));
+    QVERIFY(combo && update && size);
+    QVERIFY(!update->isEnabled());
+    size->setValue(24.0);
+    QVERIFY(update->isEnabled());
+    QSignalSpy preview(&dialog, &vinson::SettingsDialog::previewChanged);
+    combo->activated(combo->currentIndex());
+    QCOMPARE(dialog.appearance(), appearance);
+    QCOMPARE(preview.count(), 1);
+    QVERIFY(!update->isEnabled());
+}
+
+void AppearanceTest::saturatedSwatchesHaveReadableText()
+{
+    auto appearance = vinson::ThemeManager::defaultAppearance();
+    vinson::SettingsDialog dialog(appearance, {}, {}, true);
+    auto* button = dialog.findChild<QPushButton*>(QStringLiteral("textColor"));
+    QVERIFY(button != nullptr);
+    for (const QColor& color : {QColor("#00ff00"), QColor("#00ffff"), QColor("#ffff00")}) {
+        appearance.textColor = color;
+        dialog.setAppearance(appearance);
+        button->ensurePolished();
+        QCOMPARE(button->palette().color(QPalette::ButtonText), QColor(Qt::black));
+    }
+    appearance.textColor = QColor("#0000ff");
+    dialog.setAppearance(appearance);
+    button->ensurePolished();
+    QCOMPARE(button->palette().color(QPalette::ButtonText), QColor(Qt::white));
+}
+
+void AppearanceTest::roundTripsAppearanceJson()
+{
+    auto appearance = vinson::ThemeManager::defaultAppearance();
+    appearance.font.setPointSizeF(17.5);
+    appearance.font.setBold(true);
+    appearance.font.setItalic(true);
+    appearance.selectionBackgroundColor = QColor(1, 2, 3, 77);
+    appearance.lineNumberColor = QColor(4, 5, 6);
+    appearance.currentLineColor = QColor(7, 8, 9, 88);
+    appearance.cursorWidth = 5;
+    appearance.lineSpacing = 12;
+    const vinson::AppearanceBundle expected{
+        appearance,
+        {{QStringLiteral("Shared style"), appearance,
+          QKeySequence(QStringLiteral("Ctrl+Alt+1"))}},
+    };
+
+    QString error;
+    const auto restored = vinson::importAppearanceBundle(
+        vinson::exportAppearanceBundle(expected), &error);
+    QVERIFY2(restored.has_value(), qPrintable(error));
+    QCOMPARE(*restored, expected);
+
+    const auto invalid = vinson::importAppearanceBundle(
+        QByteArrayLiteral("{\"format\":\"something-else\"}"), &error);
+    QVERIFY(!invalid.has_value());
+    QVERIFY(!error.isEmpty());
 }
 
 QTEST_MAIN(AppearanceTest)

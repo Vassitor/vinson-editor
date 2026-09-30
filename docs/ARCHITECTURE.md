@@ -23,6 +23,8 @@ main
           -> FileManager (asynchronous operation coordinator)
               -> QThread + FileLoader
               -> QThread + FileSaver + QSaveFile
+          -> FileChangeMonitor (external modification, removal, and recreation detection)
+          -> RecoveryManager (background atomic recovery snapshots)
 ```
 
 `MainWindow` owns presentation and action wiring, but does not send raw
@@ -37,11 +39,34 @@ nor the find/replace widget copies the complete document. Replace All is grouped
 as one Scintilla undo action. `FindReplaceWidget` remains non-modal and returns
 focus to the editor when closed.
 
+In large modes, a single-shot `SearchController` timer schedules overlapping
+8 MiB target ranges one at a time, returning to the normal event loop between
+scans so cancellation buttons and `Esc` remain responsive. Only the query,
+options, document identity, and offsets are retained. Cancellation stops the
+timer and publishes a distinct result. `MainWindow` pauses editing, replacement,
+history restoration, and tab switching, queues open requests, and defers external
+file changes until the search ends. Text changes cancel pending searches; each
+scan also checks document identity and length before using its offsets. During
+search, `Esc` cancels first; afterwards its usual find-panel/minimal-mode behavior
+resumes.
+
 `EditHistoryWidget` reads logical edit groups from Scintilla's native undo
 stack instead of retaining document snapshots. It shows initial, current, and
 saved states, and restores a selected state by replaying undo or redo groups.
 Opening or creating a document clears the underlying stack, so history always
 belongs to the active document.
+
+Line bookmarks use native Scintilla marker 0 through `EditorWidget`. Each
+document retains its own marks and the engine adjusts them with line edits.
+A separate symbol margin toggles a clicked line without changing the caret or
+selection. Menu commands use the existing shortcut settings. Next/previous
+navigation skips the current line and wraps at document boundaries. Mark changes
+preserve text and undo history; file operations and active searches pause bookmark
+commands. Hiding line numbers or entering minimal mode sets the symbol to Empty
+and the margin width to zero, preventing Scintilla from tinting an entire line
+when its symbol margin is hidden. Bookmarks last for the current open-document
+session and are cleared on close/reload; they are not saved into text files or
+persistent session settings.
 
 `ThemeManager` owns the current in-memory appearance, clamps font sizes, keeps
 caret and selection colors opaque, and applies independent background and
@@ -79,6 +104,11 @@ Minimal mode itself is not restored at startup; persistence reads the captured
 normal geometry and prior frameless preference while Minimal mode is active.
 
 `EditorDocument` contains document metadata independently of the widget.
+Its selected encoding and saved encoding are tracked separately, so text undo
+cannot clear an encoding-only unsaved change. `EditorWidget` maintains newline
+counts per native document from insertion/deletion notifications and their
+adjacent bytes, including CRLF pairs formed or split by edits. Explicit EOL
+conversion is one native undo action; insertion EOL mode is restored per tab.
 `FileManager` owns one operation at a time and manages short-lived worker
 threads. `FileLoader` opens and decodes files in 256 KiB chunks. A four-credit
 semaphore bounds queued chunks to approximately 1 MiB; the GUI acknowledges a
@@ -86,6 +116,19 @@ chunk only after appending it to Scintilla. This prevents a fast disk from
 queuing a complete large file in memory. ASCII and UTF-8 take a validated
 byte-preserving path; only UTF-16 input creates bounded intermediate `QString`
 chunks.
+
+`FileChangeMonitor` watches both every open file and its parent directory. A
+clean document reloads automatically after an external content change; local
+edits and removed or renamed files are resolved when their tab becomes active.
+The monitor is suspended around the editor's own atomic saves and re-baselined
+after completion so those writes are not reported as external changes.
+
+`RecoveryManager` writes independent atomic data and metadata files for dirty
+normal documents on a dedicated worker thread. A snapshot is submitted after
+editing settles for about 2.5 seconds and immediately when switching tabs;
+saving, closing, and normal shutdown remove it. Leftover snapshots are offered
+on the next startup. Recovery is capped at 8 MiB per document and is disabled
+for Large and Very Large modes to avoid duplicating large buffers.
 
 `LineEndingDetector` is shared by whole-buffer and streaming paths. It recognizes
 CRLF sequences split across chunk boundaries without requiring a second pass.

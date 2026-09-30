@@ -23,7 +23,7 @@ TrayController::TrayController(QMainWindow* window, QObject* parent)
     Q_ASSERT(window_ != nullptr);
     available_ = QSystemTrayIcon::isSystemTrayAvailable();
     trayMenu_->setObjectName(QStringLiteral("trayMenu"));
-    applyNativeMenuShadow(trayMenu_);
+    applyMenuAppearance(trayMenu_);
 
     trayIcon_->setObjectName(QStringLiteral("systemTrayIcon"));
     trayIcon_->setIcon(QApplication::windowIcon());

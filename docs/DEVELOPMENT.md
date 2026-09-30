@@ -81,7 +81,25 @@ asynchronous `FileManager` load. It also covers the 64/512 MiB policy boundaries
 and range-streamed, cross-thread UTF-16 saving. `editor_widget_tests` runs with Qt's offscreen
 platform plugin and covers control-wheel font-size requests. `search_controller_tests` covers forward/backward traversal,
 the wrap-around toggle, case and whole-word matching, Unicode text, replacement and undo,
-go-to-line behavior, empty queries, and non-modal find-widget interaction.
+go-to-line behavior, empty queries, and non-modal find-widget interaction. It also
+covers asynchronous large-file boundary matches, wrap-around, cancellation and
+restart, invalidation after text/document changes, and the panel's cancel button.
+Main-window tests exercise panel/status-bar cancellation, `Esc` in normal and
+minimal modes, restored editing state, and queued external open requests.
+Bookmark tests cover toggling/clearing, wrapping navigation, empty documents,
+line edits, document isolation in normal and large modes, real gutter clicks,
+and hiding symbols without decorating the text. Main-window tests cover default
+and custom shortcuts, tab switching, clearing on reload, minimal-mode navigation,
+and disabling bookmark commands during search.
+`document_history_tests` covers normalization, de-duplication, capacity limits,
+and restoration order for recent files and closed tabs. `file_change_monitor_tests`
+uses real temporary files to verify modification, removal, recreation, and
+monitoring suspension around application saves. Main-window tests additionally
+cover clean automatic reloads and keeping local edits after a conflict.
+`recovery_manager_tests` covers background atomic snapshot writes, reads,
+removal, bulk cleanup, invalid identifier rejection, and the 8 MiB limit.
+`editor_widget_tests` verifies that restored text is marked dirty without
+changing its content.
 `appearance_tests` verifies live font/alpha previews, style application without
 document mutation, translucent editor-text pixels, and alpha-zero backgrounds.
 `window_controller_tests` verifies composable window flags, geometry retention,

@@ -30,6 +30,8 @@ enum class SearchResult {
     Wrapped,
     NotFound,
     EmptyQuery,
+    Searching,
+    Cancelled,
 };
 
 } // namespace vinson

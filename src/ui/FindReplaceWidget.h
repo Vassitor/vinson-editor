@@ -28,6 +28,7 @@ public:
     [[nodiscard]] SearchOptions options() const;
     void applyAppearance(const Appearance& appearance, bool frameless);
     void setResult(SearchResult result, const QString& message);
+    void setSearching(bool searching);
 
 signals:
     void searchTextChanged(QString text);
@@ -38,6 +39,7 @@ signals:
     void replaceRequested();
     void replaceAllRequested();
     void closeRequested();
+    void cancelSearchRequested();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -52,7 +54,11 @@ private:
     QCheckBox* wrapAroundCheck_ = nullptr;
     QLabel* resultLabel_ = nullptr;
     QWidget* replacementRow_ = nullptr;
+    QPushButton* nextButton_ = nullptr;
+    QPushButton* previousButton_ = nullptr;
+    QPushButton* cancelSearchButton_ = nullptr;
     bool replaceMode_ = false;
+    bool searching_ = false;
 };
 
 } // namespace vinson

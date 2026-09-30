@@ -1,9 +1,13 @@
 #pragma once
 
+#include <QByteArray>
 #include <QMetaType>
+#include <QDateTime>
 #include <QString>
 
 namespace vinson {
+
+inline constexpr qint64 maximumContentFingerprintBytes = 8 * 1024 * 1024;
 
 enum class TextEncoding {
     Ascii,
@@ -26,6 +30,8 @@ struct FileLoadInfo {
     TextEncoding encoding = TextEncoding::Utf8;
     LineEnding lineEnding = LineEnding::None;
     qint64 fileSize = 0;
+    QDateTime modifiedAt;
+    QByteArray contentHash;
 };
 
 struct FileSaveResult {

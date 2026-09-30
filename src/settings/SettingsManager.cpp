@@ -10,13 +10,14 @@
 #include <QSettings>
 #include <QVariant>
 
+#include <algorithm>
 #include <cmath>
 #include <utility>
 
 namespace vinson {
 namespace {
 
-constexpr int settingsSchemaVersion = 6;
+constexpr int settingsSchemaVersion = 9;
 constexpr qsizetype maximumGeometryBytes = 64 * 1024;
 
 bool readBool(const QSettings& settings, const QString& key,
@@ -53,6 +54,143 @@ QColor readColor(const QSettings& settings, const QString& key,
 QString colorText(const QColor& color)
 {
     return color.name(QColor::HexArgb);
+}
+
+bool isValidLocalShortcut(const QKeySequence& shortcut) noexcept
+{
+    if (shortcut.isEmpty()) {
+        return true;
+    }
+    if (shortcut.count() != 1) {
+        return false;
+    }
+    const Qt::Key key = shortcut[0].key();
+    return key != Qt::Key_unknown && key != Qt::Key_Control
+        && key != Qt::Key_Shift && key != Qt::Key_Alt
+        && key != Qt::Key_Meta;
+}
+
+Appearance readAppearance(const QSettings& settings, const QString& prefix,
+                          Appearance appearance)
+{
+    appearance.font.setFamily(
+        settings.value(prefix + QStringLiteral("fontFamily"),
+                         appearance.font.family()).toString());
+    bool validSize = false;
+    const qreal pointSize = settings.value(
+        prefix + QStringLiteral("fontSize"),
+        appearance.font.pointSizeF()).toDouble(&validSize);
+    appearance.font.setPointSizeF(
+        validSize ? pointSize : appearance.font.pointSizeF());
+    appearance.font.setBold(readBool(
+        settings, prefix + QStringLiteral("fontBold"), appearance.font.bold()));
+    appearance.font.setItalic(readBool(
+        settings, prefix + QStringLiteral("fontItalic"), appearance.font.italic()));
+    appearance.textColor = readColor(
+        settings, prefix + QStringLiteral("textColor"),
+        appearance.textColor);
+    appearance.backgroundColor = readColor(
+        settings, prefix + QStringLiteral("backgroundColor"),
+        appearance.backgroundColor);
+    appearance.cursorColor = readColor(
+        settings, prefix + QStringLiteral("cursorColor"),
+        appearance.cursorColor);
+    appearance.selectionTextColor = readColor(
+        settings, prefix + QStringLiteral("selectionTextColor"),
+        appearance.selectionTextColor);
+    appearance.selectionBackgroundColor = readColor(
+        settings, prefix + QStringLiteral("selectionBackgroundColor"),
+        appearance.selectionBackgroundColor);
+    appearance.lineNumberColor = readColor(
+        settings, prefix + QStringLiteral("lineNumberColor"),
+        appearance.lineNumberColor);
+    appearance.currentLineColor = readColor(
+        settings, prefix + QStringLiteral("currentLineColor"),
+        appearance.currentLineColor);
+    bool validCursorWidth = false;
+    const int cursorWidth = settings.value(
+        prefix + QStringLiteral("cursorWidth"), appearance.cursorWidth)
+                                .toInt(&validCursorWidth);
+    appearance.cursorWidth = validCursorWidth ? cursorWidth : appearance.cursorWidth;
+    bool validLineSpacing = false;
+    const int lineSpacing = settings.value(
+        prefix + QStringLiteral("lineSpacing"), appearance.lineSpacing)
+                               .toInt(&validLineSpacing);
+    appearance.lineSpacing = validLineSpacing ? lineSpacing : appearance.lineSpacing;
+
+    return appearance;
+}
+
+void writeAppearance(QSettings& settings, const QString& prefix,
+                     const Appearance& appearance)
+{
+    settings.setValue(prefix + QStringLiteral("fontFamily"),
+                        appearance.font.family());
+    settings.setValue(prefix + QStringLiteral("fontSize"),
+                        appearance.font.pointSizeF());
+    settings.setValue(prefix + QStringLiteral("fontBold"),
+                      appearance.font.bold());
+    settings.setValue(prefix + QStringLiteral("fontItalic"),
+                      appearance.font.italic());
+    settings.setValue(prefix + QStringLiteral("textColor"),
+                        colorText(appearance.textColor));
+    settings.setValue(prefix + QStringLiteral("backgroundColor"),
+                        colorText(appearance.backgroundColor));
+    settings.setValue(prefix + QStringLiteral("cursorColor"),
+                        colorText(appearance.cursorColor));
+    settings.setValue(prefix + QStringLiteral("selectionTextColor"),
+                        colorText(appearance.selectionTextColor));
+    settings.setValue(prefix + QStringLiteral("selectionBackgroundColor"),
+                      colorText(appearance.selectionBackgroundColor));
+    settings.setValue(prefix + QStringLiteral("lineNumberColor"),
+                      colorText(appearance.lineNumberColor));
+    settings.setValue(prefix + QStringLiteral("currentLineColor"),
+                      colorText(appearance.currentLineColor));
+    settings.setValue(prefix + QStringLiteral("cursorWidth"),
+                      appearance.cursorWidth);
+    settings.setValue(prefix + QStringLiteral("lineSpacing"),
+                      appearance.lineSpacing);
+}
+
+Appearance normalizedAppearance(Appearance appearance)
+{
+    const Appearance fallback = ThemeManager::defaultAppearance();
+    if (appearance.font.family().isEmpty()
+        || !QFontDatabase::hasFamily(appearance.font.family())) {
+        appearance.font.setFamily(fallback.font.family());
+    }
+    const qreal pointSize = appearance.font.pointSizeF();
+    if (!std::isfinite(pointSize) || pointSize < 6.0 || pointSize > 72.0) {
+        appearance.font.setPointSizeF(
+            fallback.font.pointSizeF());
+    }
+
+    auto validOr = [](QColor color, const QColor& defaultColor) {
+        return color.isValid() ? color : defaultColor;
+    };
+    appearance.textColor = validOr(
+        appearance.textColor, fallback.textColor);
+    appearance.backgroundColor = validOr(
+        appearance.backgroundColor, fallback.backgroundColor);
+    appearance.cursorColor = validOr(
+        appearance.cursorColor, fallback.cursorColor);
+    appearance.selectionTextColor = validOr(
+        appearance.selectionTextColor,
+        fallback.selectionTextColor);
+    appearance.selectionBackgroundColor = validOr(
+        appearance.selectionBackgroundColor,
+        fallback.selectionBackgroundColor);
+    appearance.lineNumberColor = validOr(
+        appearance.lineNumberColor, fallback.lineNumberColor);
+    appearance.currentLineColor = validOr(
+        appearance.currentLineColor, fallback.currentLineColor);
+    appearance.cursorColor.setAlpha(255);
+    appearance.selectionTextColor.setAlpha(255);
+    appearance.lineNumberColor.setAlpha(255);
+    appearance.cursorWidth = std::clamp(appearance.cursorWidth, 1, 5);
+    appearance.lineSpacing = std::clamp(appearance.lineSpacing, 0, 20);
+
+    return appearance;
 }
 
 } // namespace
@@ -97,27 +235,30 @@ ApplicationSettings SettingsManager::load() const
     bool validSchemaVersion = false;
     const int storedSchemaVersion = settings_->value(
         QStringLiteral("schema/version"), 0).toInt(&validSchemaVersion);
-    loaded.appearance.font.setFamily(
-        settings_->value(QStringLiteral("appearance/fontFamily"),
-                         loaded.appearance.font.family()).toString());
-    bool validSize = false;
-    const qreal pointSize = settings_->value(
-        QStringLiteral("appearance/fontSize"),
-        loaded.appearance.font.pointSizeF()).toDouble(&validSize);
-    loaded.appearance.font.setPointSizeF(
-        validSize ? pointSize : loaded.appearance.font.pointSizeF());
-    loaded.appearance.textColor = readColor(
-        *settings_, QStringLiteral("appearance/textColor"),
-        loaded.appearance.textColor);
-    loaded.appearance.backgroundColor = readColor(
-        *settings_, QStringLiteral("appearance/backgroundColor"),
-        loaded.appearance.backgroundColor);
-    loaded.appearance.cursorColor = readColor(
-        *settings_, QStringLiteral("appearance/cursorColor"),
-        loaded.appearance.cursorColor);
-    loaded.appearance.selectionTextColor = readColor(
-        *settings_, QStringLiteral("appearance/selectionTextColor"),
-        loaded.appearance.selectionTextColor);
+    loaded.appearance = readAppearance(
+        *settings_, QStringLiteral("appearance/"), loaded.appearance);
+    const int presetCount = std::min(
+        settings_->beginReadArray(QStringLiteral("appearancePresets")),
+        static_cast<int>(maximumAppearancePresets));
+    for (int index = 0; index < presetCount; ++index) {
+        settings_->setArrayIndex(index);
+        AppearancePreset preset;
+        preset.name = settings_->value(QStringLiteral("name")).toString();
+        preset.appearance = readAppearance(
+            *settings_, QStringLiteral("appearance/"), defaults().appearance);
+        preset.shortcut = QKeySequence::fromString(
+            settings_->value(QStringLiteral("shortcut")).toString(),
+            QKeySequence::PortableText);
+        loaded.appearancePresets.append(std::move(preset));
+    }
+    settings_->endArray();
+    settings_->beginGroup(QStringLiteral("shortcuts"));
+    for (const QString& id : settings_->childKeys()) {
+        loaded.shortcuts.insert(
+            id, QKeySequence::fromString(settings_->value(id).toString(),
+                                         QKeySequence::PortableText));
+    }
+    settings_->endGroup();
 
     loaded.windowGeometry = settings_->value(
         QStringLiteral("window/geometry")).toByteArray();
@@ -173,18 +314,28 @@ bool SettingsManager::save(const ApplicationSettings& settings)
 {
     const ApplicationSettings safe = normalized(settings);
     settings_->setValue(QStringLiteral("schema/version"), settingsSchemaVersion);
-    settings_->setValue(QStringLiteral("appearance/fontFamily"),
-                        safe.appearance.font.family());
-    settings_->setValue(QStringLiteral("appearance/fontSize"),
-                        safe.appearance.font.pointSizeF());
-    settings_->setValue(QStringLiteral("appearance/textColor"),
-                        colorText(safe.appearance.textColor));
-    settings_->setValue(QStringLiteral("appearance/backgroundColor"),
-                        colorText(safe.appearance.backgroundColor));
-    settings_->setValue(QStringLiteral("appearance/cursorColor"),
-                        colorText(safe.appearance.cursorColor));
-    settings_->setValue(QStringLiteral("appearance/selectionTextColor"),
-                        colorText(safe.appearance.selectionTextColor));
+    writeAppearance(*settings_, QStringLiteral("appearance/"), safe.appearance);
+    settings_->remove(QStringLiteral("appearancePresets"));
+    settings_->beginWriteArray(QStringLiteral("appearancePresets"),
+                               static_cast<int>(safe.appearancePresets.size()));
+    for (qsizetype index = 0; index < safe.appearancePresets.size(); ++index) {
+        settings_->setArrayIndex(static_cast<int>(index));
+        const AppearancePreset& preset = safe.appearancePresets.at(index);
+        settings_->setValue(QStringLiteral("name"), preset.name);
+        settings_->setValue(QStringLiteral("shortcut"),
+                            preset.shortcut.toString(QKeySequence::PortableText));
+        writeAppearance(*settings_, QStringLiteral("appearance/"), preset.appearance);
+    }
+    settings_->endArray();
+    settings_->remove(QStringLiteral("shortcuts"));
+    settings_->beginGroup(QStringLiteral("shortcuts"));
+    for (auto iterator = safe.shortcuts.cbegin();
+         iterator != safe.shortcuts.cend(); ++iterator) {
+        settings_->setValue(
+            iterator.key(),
+            iterator.value().toString(QKeySequence::PortableText));
+    }
+    settings_->endGroup();
     settings_->setValue(QStringLiteral("window/geometry"), safe.windowGeometry);
     settings_->setValue(QStringLiteral("window/alwaysOnTop"), safe.alwaysOnTop);
     settings_->setValue(QStringLiteral("window/frameless"), safe.frameless);
@@ -214,30 +365,40 @@ QString SettingsManager::fileName() const
 ApplicationSettings SettingsManager::normalized(ApplicationSettings settings)
 {
     const ApplicationSettings fallback = defaults();
-    if (settings.appearance.font.family().isEmpty()
-        || !QFontDatabase::hasFamily(settings.appearance.font.family())) {
-        settings.appearance.font.setFamily(fallback.appearance.font.family());
+    settings.appearance = normalizedAppearance(std::move(settings.appearance));
+    QVector<AppearancePreset> presets;
+    QStringList names;
+    QList<QKeySequence> shortcuts;
+    for (AppearancePreset preset : std::as_const(settings.appearancePresets)) {
+        preset.name = preset.name.trimmed().left(maximumAppearancePresetNameLength);
+        if (preset.name.isEmpty() || names.contains(preset.name, Qt::CaseInsensitive)) {
+            continue;
+        }
+        names.append(preset.name);
+        preset.appearance = normalizedAppearance(std::move(preset.appearance));
+        if (!isValidLocalShortcut(preset.shortcut)
+            || shortcuts.contains(preset.shortcut)) {
+            preset.shortcut = {};
+        }
+        if (!preset.shortcut.isEmpty()) {
+            shortcuts.append(preset.shortcut);
+        }
+        presets.append(std::move(preset));
+        if (presets.size() == maximumAppearancePresets) {
+            break;
+        }
     }
-    const qreal pointSize = settings.appearance.font.pointSizeF();
-    if (!std::isfinite(pointSize) || pointSize < 6.0 || pointSize > 72.0) {
-        settings.appearance.font.setPointSizeF(
-            fallback.appearance.font.pointSizeF());
+    settings.appearancePresets = std::move(presets);
+    QMap<QString, QKeySequence> shortcutsById;
+    for (auto iterator = settings.shortcuts.cbegin();
+         iterator != settings.shortcuts.cend(); ++iterator) {
+        const QString id = iterator.key().trimmed().left(64);
+        if (!id.isEmpty() && !id.contains(QLatin1Char('/'))
+            && isValidLocalShortcut(iterator.value())) {
+            shortcutsById.insert(id, iterator.value());
+        }
     }
-
-    auto validOr = [](QColor color, const QColor& defaultColor) {
-        return color.isValid() ? color : defaultColor;
-    };
-    settings.appearance.textColor = validOr(
-        settings.appearance.textColor, fallback.appearance.textColor);
-    settings.appearance.backgroundColor = validOr(
-        settings.appearance.backgroundColor, fallback.appearance.backgroundColor);
-    settings.appearance.cursorColor = validOr(
-        settings.appearance.cursorColor, fallback.appearance.cursorColor);
-    settings.appearance.selectionTextColor = validOr(
-        settings.appearance.selectionTextColor,
-        fallback.appearance.selectionTextColor);
-    settings.appearance.cursorColor.setAlpha(255);
-    settings.appearance.selectionTextColor.setAlpha(255);
+    settings.shortcuts = std::move(shortcutsById);
 
     if (settings.windowGeometry.size() > maximumGeometryBytes) {
         settings.windowGeometry.clear();
@@ -294,6 +455,12 @@ ApplicationSettings SettingsManager::normalized(ApplicationSettings settings)
         || (!settings.focusShortcut.isEmpty()
             && settings.focusShortcut == settings.bossKey)) {
         settings.focusShortcut = fallback.focusShortcut;
+    }
+    // A customized boss key may itself use the default focus shortcut.
+    // Falling back must not register the same system-wide key twice.
+    if (!settings.focusShortcut.isEmpty()
+        && settings.focusShortcut == settings.bossKey) {
+        settings.focusShortcut = {};
     }
     return settings;
 }

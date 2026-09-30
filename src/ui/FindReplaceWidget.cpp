@@ -39,8 +39,13 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     findEdit_->setClearButtonEnabled(true);
     replacementEdit_->setClearButtonEnabled(true);
 
-    auto* nextButton = new QPushButton(tr("Next"), this);
-    auto* previousButton = new QPushButton(tr("Previous"), this);
+    nextButton_ = new QPushButton(tr("Next"), this);
+    previousButton_ = new QPushButton(tr("Previous"), this);
+    cancelSearchButton_ = new QPushButton(tr("Cancel Search"), this);
+    cancelSearchButton_->setObjectName(QStringLiteral("cancelSearchButton"));
+    cancelSearchButton_->setToolTip(QStringLiteral("Esc"));
+    cancelSearchButton_->hide();
+    resultLabel_->setObjectName(QStringLiteral("searchResultLabel"));
     auto* closeButton = new QPushButton(tr("Close"), this);
     auto* replaceButton = new QPushButton(tr("Replace"), replacementRow_);
     auto* replaceAllButton = new QPushButton(tr("Replace All"), replacementRow_);
@@ -49,8 +54,9 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
     findRow->setContentsMargins(0, 0, 0, 0);
     findRow->addWidget(new QLabel(tr("Find:"), this));
     findRow->addWidget(findEdit_, 1);
-    findRow->addWidget(previousButton);
-    findRow->addWidget(nextButton);
+    findRow->addWidget(previousButton_);
+    findRow->addWidget(nextButton_);
+    findRow->addWidget(cancelSearchButton_);
     findRow->addWidget(closeButton);
 
     auto* replaceRowLayout = new QHBoxLayout(replacementRow_);
@@ -87,9 +93,9 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
             this, [this] { publishOptions(); });
     connect(wrapAroundCheck_, &QCheckBox::toggled,
             this, [this] { publishOptions(); });
-    connect(nextButton, &QPushButton::clicked,
+    connect(nextButton_, &QPushButton::clicked,
             this, &FindReplaceWidget::findNextRequested);
-    connect(previousButton, &QPushButton::clicked,
+    connect(previousButton_, &QPushButton::clicked,
             this, &FindReplaceWidget::findPreviousRequested);
     connect(replaceButton, &QPushButton::clicked,
             this, &FindReplaceWidget::replaceRequested);
@@ -97,11 +103,19 @@ FindReplaceWidget::FindReplaceWidget(QWidget* parent)
             this, &FindReplaceWidget::replaceAllRequested);
     connect(closeButton, &QPushButton::clicked,
             this, &FindReplaceWidget::closeRequested);
+    connect(cancelSearchButton_, &QPushButton::clicked,
+            this, &FindReplaceWidget::cancelSearchRequested);
 
     auto* escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), this);
     escapeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
     connect(escapeShortcut, &QShortcut::activated,
-            this, &FindReplaceWidget::closeRequested);
+            this, [this] {
+                if (searching_) {
+                    emit cancelSearchRequested();
+                } else {
+                    emit closeRequested();
+                }
+            });
     hide();
 }
 
@@ -170,11 +184,33 @@ void FindReplaceWidget::setResult(SearchResult result, const QString& message)
     resultLabel_->style()->polish(resultLabel_);
 }
 
+void FindReplaceWidget::setSearching(bool searching)
+{
+    const bool restoreFocus = !searching && cancelSearchButton_->hasFocus();
+    searching_ = searching;
+    findEdit_->setEnabled(!searching);
+    replacementRow_->setEnabled(!searching);
+    matchCaseCheck_->setEnabled(!searching);
+    wholeWordCheck_->setEnabled(!searching);
+    wrapAroundCheck_->setEnabled(!searching);
+    nextButton_->setEnabled(!searching);
+    previousButton_->setEnabled(!searching);
+    cancelSearchButton_->setVisible(searching);
+    if (isVisible() && searching) {
+        cancelSearchButton_->setFocus();
+    } else if (restoreFocus) {
+        findEdit_->setFocus();
+    }
+}
+
 bool FindReplaceWidget::eventFilter(QObject* watched, QEvent* event)
 {
     if ((watched == findEdit_ || watched == replacementEdit_)
         && event->type() == QEvent::KeyPress) {
         const auto* keyEvent = static_cast<QKeyEvent*>(event);
+        if (searching_) {
+            return true;
+        }
         if (keyEvent->key() == Qt::Key_Return
             || keyEvent->key() == Qt::Key_Enter) {
             if (keyEvent->modifiers().testFlag(Qt::ShiftModifier)) {

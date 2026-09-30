@@ -4,6 +4,8 @@
 
 ## Large-file design
 
+Explicit EOL conversion uses Scintilla's synchronous, undoable conversion and may pause the UI on very large documents. Encoding conversion stays in the existing save worker, including the range-streamed large-document path. EOL status maintains per-document CR/LF/CRLF counts from text-change notifications, including boundary changes, without whole-document snapshots or rescans.
+
 Application code does not access raw Scintilla messages outside `EditorWidget`,
 and file workers never touch the GUI control directly.
 
@@ -28,11 +30,14 @@ Scintilla, and loading remains cancelable.
 Line-ending detection shares this streaming path and recognizes CRLF sequences
 split across chunks without an additional full-file scan.
 
-Large-mode search uses Scintilla target ranges in overlapping 8 MiB slices.
-The overlap preserves matches that cross a slice boundary. Between misses, the
-application processes paint, timer, and other non-user-input events; it does
-not copy or index the complete document. Replace All remains synchronous and
-Very Large mode requires confirmation.
+Large-mode find schedules overlapping 8 MiB Scintilla target ranges with a
+single-shot timer. The overlap preserves matches that cross a slice boundary,
+and every scan returns to the normal event loop without copying or indexing the
+complete document. Progress and cancellation remain available while editing,
+replacement, and tab switching pause until the search ends. Replace All remains
+synchronous and Very Large mode requires confirmation. The benchmark still uses
+the synchronous slicing helper; the historical measurements below have not been
+rerun to measure timer scheduling overhead.
 
 Normal saving takes one complete UTF-8 snapshot. Large modes instead let the
 worker request one 256 KiB Scintilla range at a time, perform streaming
@@ -115,13 +120,17 @@ no meaningful RSS increase. The Normal path intentionally showed one additional
 
 ## Known limitations
 
+- Line bookmarks allocate Scintilla's native marker structure on demand. The
+  first mark allocates a slot for each document line, adding line metadata memory
+  in documents with very many lines. Documents that have never had a mark do not allocate
+  this structure; the historical measurements above exclude bookmark overhead.
 - Creating Scintilla's initial 1 GiB gap buffer still causes a measured pause of
   about 1.5 seconds on this machine. Moving document construction fully off the
   GUI thread would require adopting Scintilla's background-loader lifecycle and
   is deferred until more platform measurements justify that complexity.
-- Search slicing keeps paint and timers moving but intentionally defers user
-  input until the current search finishes; search cancellation is not yet
-  exposed.
+- Search cancellation takes effect between slices; an individual Scintilla range
+  scan cannot be interrupted, so cancellation latency depends on its duration.
+  Replace All remains synchronous and does not support cancellation yet.
 - Middle insertion remains proportional to the amount of text moved through the
   Scintilla gap buffer, although the measured 1 GiB insertion was 126 ms after
   reserving edit capacity.

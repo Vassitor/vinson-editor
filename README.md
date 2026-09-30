@@ -3,8 +3,7 @@
 [简体中文](README.zh-CN.md) | English
 
 Vinson Editor is a lightweight, native plain-text editor built with C++20,
-Qt 6 Widgets, and Scintilla. Phase 10 release engineering is in place: the
-native editing surface is backed by asynchronous file loading, safe saving,
+Qt 6 Widgets, and Scintilla. It supports asynchronous file loading, safe saving,
 target-based search/replace, live appearance customization, reversible window
 modes, and a specialized large-document path.
 
@@ -16,9 +15,15 @@ modes, and a specialized large-document path.
 - Dockable per-document-session edit-history timeline with current/saved markers
   and state restoration
 - New, Open, Save, Save As, Reload, Exit, and single-file drag-and-drop
+- Multi-document tabs, session restore, recent files, and reopening the most recently closed file tab
+- External modification, removal, and rename detection with automatic clean reloads and explicit conflict choices
+- Save-time disk version checks, including content fingerprints up to 8 MiB, before overwriting an externally changed file
+- Size-bounded background recovery snapshots for normal documents, offered after an abnormal exit
 - Unsaved-change protection for New, Open, Reload, and Exit
 - UTF-8, UTF-8 BOM, ASCII, UTF-16 LE, and UTF-16 BE round trips
-- LF, CRLF, CR, and mixed-EOL detection without normalizing existing content
+- File > Save Encoding selects UTF-8, UTF-8 BOM, UTF-16 LE, or UTF-16 BE for the next save; changing it marks the document as unsaved independently of text undo.
+- File > Convert Line Endings converts existing text to LF, CRLF, or CR as one undo action and sets the newline used for subsequent input in that tab.
+- LF, CRLF, CR, and mixed-EOL detection; existing content stays intact until explicitly converted
 - Worker-thread, 256 KiB chunked loading with a bounded GUI queue and cancellation
 - Worker-thread atomic saving through `QSaveFile`
 - Automatic Normal/Large/Very Large modes at centralized 64/512 MiB thresholds
@@ -32,9 +37,13 @@ modes, and a specialized large-document path.
 - Recovery of saved windows that no longer intersect an available display
 - Cursor line/column, encoding, EOL, file-size, and modified-state feedback
 - Non-modal find/replace with next, previous, wrap-around, case, and whole-word options
+- Scheduled large-file search slices with progress and cancellation through Cancel Search, the status-bar Cancel button, or `Esc`; cancellation preserves text, selection, and undo history
 - Replace current, replace all as one undo action, and go to line
+- Per-document line bookmarks with a clickable gutter, customizable shortcuts, clearing, and wrapping next/previous navigation; marks follow line edits and survive tab switches, and are cleared when closing or reloading a document
 - Live font family/size and text, background, cursor, and selected-text colors
-- Independent background and editor-font alpha controls from 0–255
+- Multiple named custom appearance styles with optional switch shortcuts and JSON import/export
+- Independent background and text opacity: 0 is transparent, 255 is opaque.
+  Background opacity applies in frameless and minimal modes.
 - Configurable system-wide boss key plus a focus shortcut that shows, restores,
   and activates the window, then focuses the editor for immediate typing
 - Frameless mode with top-border or `Alt+Left Drag` system movement and edge resizing
@@ -119,6 +128,11 @@ dependency policy.
 
 ## Keyboard shortcuts
 
+All application command shortcuts can be reassigned or cleared from **Settings
+→ Appearance and Shortcuts → Shortcuts**. Custom style shortcuts are edited with
+their styles on the Appearance tab. Mouse-wheel and drag gestures keep the
+bindings shown below.
+
 | Action | Shortcut |
 | --- | --- |
 | New | `Ctrl+N` |
@@ -134,7 +148,11 @@ dependency policy.
 | Find / Replace | `Ctrl+F` / `Ctrl+H` |
 | Find next / previous | `F3` / `Shift+F3` |
 | Go to line | `Ctrl+G` |
+| Toggle current-line bookmark | `Ctrl+F2` |
+| Next / previous bookmark | `F2` / `Shift+F2` |
+| Clear all bookmarks in the current document | `Ctrl+Shift+F2` |
 | Edit history | `Ctrl+Shift+H` |
+| Previous / next custom style | `Ctrl+Alt+PageUp` / `Ctrl+Alt+PageDown` |
 | Adjust font size | `Ctrl+Mouse Wheel` |
 | Always on top | `Ctrl+Shift+T` |
 | Frameless mode | `F11` |
@@ -142,7 +160,24 @@ dependency policy.
 | Minimal mode | `Ctrl+Shift+M` |
 | Exit minimal mode | `Esc` or `Ctrl+Shift+M` |
 
+## Windows installer
+
+To generate a Windows installer, install [NSIS 3.03+](https://nsis.sourceforge.io/Download)
+and run `./scripts/package-installer-windows.ps1`. Use `-NsisRoot "C:\Tools\NSIS"`
+for an extracted NSIS distribution. The script builds, runs the complete test suite,
+deploys Qt, and writes an `.exe` installer with a `.sha256` checksum under
+`build/release/packages/<timestamp>/`. Installation requires administrator rights
+and includes Start Menu shortcuts, third-party notices, and an uninstall entry.
+When upgrading, the installer reads the registered installation directory and
+shows an in-place update notice without uninstalling the previous version. If
+the editor is running, it asks whether to stop the process and continues only
+after stopping it successfully. Uninstalling retains user settings
+and documents. The existing `package-windows.ps1` continues to produce portable ZIPs.
+The confirmation warns that stopping the running process can discard unsaved content.
+
 ## License
 
 Project code is licensed under the MIT License. Scintilla and Lexilla retain
 their upstream licenses in their respective `third_party` directories.
+Third-party copyright notices, Qt SDK inventories, and license texts are listed
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and included in release packages.

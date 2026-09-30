@@ -3,6 +3,7 @@
 #include "file/EncodingDetector.h"
 
 #include <QFile>
+#include <QCryptographicHash>
 #include <QStringConverter>
 
 namespace vinson {
@@ -111,14 +112,22 @@ void FileLoader::load()
     }
 
     const qint64 totalBytes = file.size();
+    const QDateTime sourceModifiedAt = file.fileTime(
+        QFileDevice::FileModificationTime);
+    bool hashContent = totalBytes <= maximumContentFingerprintBytes;
+    QCryptographicHash contentHash(QCryptographicHash::Sha256);
     QByteArray firstChunk = file.read(chunkSize);
     if (firstChunk.isNull() && file.error() != QFileDevice::NoError) {
         emit failed(tr("Cannot read %1: %2").arg(path_, file.errorString()));
         return;
     }
+    if (hashContent) {
+        contentHash.addData(firstChunk);
+    }
 
     const EncodingDetection detection = EncodingDetector::detect(firstChunk);
     FileLoadInfo info{path_, detection.encoding, LineEnding::None, totalBytes};
+    info.modifiedAt = sourceModifiedAt;
 
     const bool sourceIsUtf16 = detection.encoding == TextEncoding::Utf16Le
         || detection.encoding == TextEncoding::Utf16Be;
@@ -201,6 +210,11 @@ void FileLoader::load()
             return;
         }
         bytesRead += chunk.size();
+        if (hashContent && bytesRead <= maximumContentFingerprintBytes) {
+            contentHash.addData(chunk);
+        } else {
+            hashContent = false;
+        }
         if (sourceIsUtf16) {
             if (!decodeUtf16Chunk(chunk)) {
                 return;
@@ -237,6 +251,9 @@ void FileLoader::load()
     info.lineEnding = lineEndings.result();
     if (info.encoding == TextEncoding::Ascii && !allAscii) {
         info.encoding = TextEncoding::Utf8;
+    }
+    if (hashContent && bytesRead == totalBytes) {
+        info.contentHash = contentHash.result();
     }
     emit completed(info);
 }

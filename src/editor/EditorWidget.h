@@ -6,6 +6,7 @@
 #include <QByteArrayView>
 #include <QColor>
 #include <QFont>
+#include <QHash>
 #include <QString>
 #include <QVector>
 
@@ -50,7 +51,11 @@ public:
                                      qint64 expectedUtf8Bytes = 0);
     [[nodiscard]] bool resetDocument();
     void completeFileLoad(LineEnding lineEnding);
+    void setInsertionLineEnding(LineEnding lineEnding);
+    void convertLineEndings(LineEnding lineEnding);
+    [[nodiscard]] LineEnding detectedLineEnding() const;
     void markSaved();
+    void markRecovered();
     [[nodiscard]] bool isEmpty() const;
     [[nodiscard]] LargeFileMode largeFileMode() const noexcept;
     [[nodiscard]] int documentOptionFlags() const;
@@ -64,11 +69,21 @@ public:
     void setBackgroundColor(const QColor& color);
     void setCursorColor(const QColor& color);
     void setSelectionTextColor(const QColor& color);
+    void setSelectionBackgroundColor(const QColor& color);
+    void setLineNumberColor(const QColor& color);
+    void setCurrentLineColor(const QColor& color);
+    void setCursorWidth(int width);
+    void setLineSpacing(int spacing);
     [[nodiscard]] const QFont& editorFont() const noexcept;
     [[nodiscard]] const QColor& textColor() const noexcept;
     [[nodiscard]] const QColor& backgroundColor() const noexcept;
     [[nodiscard]] const QColor& cursorColor() const noexcept;
     [[nodiscard]] const QColor& selectionTextColor() const noexcept;
+    [[nodiscard]] const QColor& selectionBackgroundColor() const noexcept;
+    [[nodiscard]] const QColor& lineNumberColor() const noexcept;
+    [[nodiscard]] const QColor& currentLineColor() const noexcept;
+    [[nodiscard]] int cursorWidth() const noexcept;
+    [[nodiscard]] int lineSpacing() const noexcept;
     void setWordWrapEnabled(bool enabled);
     [[nodiscard]] bool isWordWrapEnabled() const;
     void setLineNumbersVisible(bool visible);
@@ -96,6 +111,12 @@ public:
     [[nodiscard]] qint64 currentOneBasedLine() const;
     bool goToOneBasedLine(qint64 line);
 
+    [[nodiscard]] bool hasBookmarkAtLine(qint64 oneBasedLine) const;
+    bool toggleBookmarkAtLine(qint64 oneBasedLine);
+    void clearAllBookmarks();
+    bool goToNextBookmark();
+    bool goToPreviousBookmark();
+
     [[nodiscard]] QVector<EditHistoryEntry> editHistory() const;
     [[nodiscard]] int currentEditHistoryPosition() const;
     [[nodiscard]] int savedEditHistoryPosition() const;
@@ -109,6 +130,9 @@ signals:
     void editHistoryChanged();
     void findRequested();
     void fontSizeAdjustmentRequested(int steps);
+    void bookmarksChanged();
+    void bookmarkToggled(qint64 oneBasedLine, bool enabled);
+    void lineEndingChanged(vinson::LineEnding lineEnding);
 
 protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
@@ -123,6 +147,14 @@ private:
                                        qint64 initialBytes = 0);
     void refreshLineNumberMargin();
     void emitCursorPosition();
+    bool goToBookmark(bool forward);
+    void trackLineEndingEdit(qint64 position, const QByteArray& text, bool inserted);
+    struct LineEndingCounts {
+        qint64 cr = 0;
+        qint64 lf = 0;
+        qint64 pairs = 0;
+    };
+    QHash<sptr_t, LineEndingCounts> lineEndingCounts_;
 
     bool lineNumbersVisible_ = true;
     QFont editorFont_;
@@ -130,6 +162,11 @@ private:
     QColor backgroundColor_;
     QColor cursorColor_;
     QColor selectionTextColor_;
+    QColor selectionBackgroundColor_;
+    QColor lineNumberColor_;
+    QColor currentLineColor_;
+    int cursorWidth_ = 2;
+    int lineSpacing_ = 0;
     LargeFileMode largeFileMode_ = LargeFileMode::Normal;
     int controlWheelDelta_ = 0;
 };

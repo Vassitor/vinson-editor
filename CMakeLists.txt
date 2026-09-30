@@ -49,6 +49,8 @@ add_library(vinson_core STATIC
     src/file/EncodingDetector.h
     src/file/FileLoader.cpp
     src/file/FileLoader.h
+    src/file/FileChangeMonitor.cpp
+    src/file/FileChangeMonitor.h
     src/file/FileManager.cpp
     src/file/FileManager.h
     src/file/FileSaver.cpp
@@ -57,6 +59,10 @@ add_library(vinson_core STATIC
     src/file/FileTypes.h
     src/largefile/LargeFilePolicy.cpp
     src/largefile/LargeFilePolicy.h
+    src/session/DocumentHistory.cpp
+    src/session/DocumentHistory.h
+    src/session/RecoveryManager.cpp
+    src/session/RecoveryManager.h
 )
 target_include_directories(vinson_core PUBLIC src)
 target_link_libraries(vinson_core PUBLIC Qt6::Core)
@@ -68,6 +74,8 @@ add_library(vinson_editor_ui STATIC
     src/search/SearchController.h
     src/search/SearchTypes.h
     src/settings/Appearance.h
+    src/settings/AppearanceIO.cpp
+    src/settings/AppearanceIO.h
     src/settings/Localization.cpp
     src/settings/Localization.h
     src/settings/SettingsManager.cpp
@@ -84,6 +92,8 @@ add_library(vinson_editor_ui STATIC
     src/ui/SettingsDialog.h
     src/window/NativeWindowAppearance.cpp
     src/window/NativeWindowAppearance.h
+    src/window/NativeTitleBar.cpp
+    src/window/NativeTitleBar.h
     src/window/GlobalShortcut.cpp
     src/window/GlobalShortcut.h
     src/window/TrayController.cpp
@@ -96,6 +106,15 @@ add_library(vinson_editor_ui STATIC
 target_include_directories(vinson_editor_ui PUBLIC src)
 target_link_libraries(vinson_editor_ui
     PUBLIC vinson_core Qt6::Widgets Scintilla::Scintilla)
+
+qt_add_resources(vinson_editor_ui vinson_settings_icons
+    PREFIX "/settings"
+    BASE "resources/icons/settings"
+    FILES
+        resources/icons/settings/chevron-down.xpm
+        resources/icons/settings/chevron-up.xpm
+        resources/icons/settings/chevron-down-disabled.xpm
+        resources/icons/settings/chevron-up-disabled.xpm)
 
 if(WIN32)
     target_link_libraries(vinson_editor_ui PRIVATE dwmapi)
@@ -148,6 +167,8 @@ target_link_libraries(vinson-editor
     PRIVATE vinson_editor_ui)
 
 if(WIN32)
+    set(VINSON_WINDOWS_ICON
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/vinson-editor.ico")
     configure_file(
         resources/windows/vinson-editor.rc.in
         generated/vinson-editor.rc
@@ -205,6 +226,10 @@ install(FILES
 install(DIRECTORY docs/
     DESTINATION docs
     FILES_MATCHING PATTERN "*.md")
+install(FILES THIRD_PARTY_NOTICES.md
+    DESTINATION "." COMPONENT third-party-licenses)
+install(DIRECTORY licenses/
+    DESTINATION licenses COMPONENT third-party-licenses)
 
 # Qt uses windeployqt on Windows and CMake's runtime dependency scanner on
 # Linux. This includes the required platform plugin while leaving the statically
@@ -265,6 +290,34 @@ set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
 set(CPACK_MONOLITHIC_INSTALL ON)
 if(WIN32)
     set(CPACK_GENERATOR ZIP)
+    # A stable installation identity lets later versions find the previous
+    # installation instead of creating a second Apps & features entry.
+    set(CPACK_PACKAGE_INSTALL_DIRECTORY "Vinson Editor")
+    set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY "VinsonEditor")
+    set(CPACK_PACKAGE_EXECUTABLES "vinson-editor" "Vinson Editor")
+    set(CPACK_NSIS_DISPLAY_NAME "Vinson Editor")
+    set(CPACK_NSIS_PACKAGE_NAME "Vinson Editor")
+    set(CPACK_NSIS_MUI_ICON "${VINSON_WINDOWS_ICON}")
+    set(CPACK_NSIS_MUI_UNIICON "${VINSON_WINDOWS_ICON}")
+    set(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
+    set(CPACK_NSIS_INSTALLED_ICON_NAME "vinson-editor.exe")
+    # Reuse the registered installation directory and update files in place.
+    # This keeps upgrades silent about uninstalling the previous version while
+    # still falling back to Program Files for a first installation.
+    set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL OFF)
+    file(TO_NATIVE_PATH
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/windows/VinsonUpgrade.nsh"
+        VINSON_NSIS_UPGRADE_INCLUDE)
+    string(REPLACE "\\" "\\\\" VINSON_NSIS_UPGRADE_INCLUDE
+        "${VINSON_NSIS_UPGRADE_INCLUDE}")
+    set(CPACK_NSIS_DEFINES
+        "InstallDirRegKey HKLM 'Software\\\\${CPACK_PACKAGE_VENDOR}\\\\${CPACK_PACKAGE_INSTALL_REGISTRY_KEY}' ''\n!include \\\"${VINSON_NSIS_UPGRADE_INCLUDE}\\\"")
+    set(CPACK_NSIS_EXTRA_PREINSTALL_COMMANDS
+        "!insertmacro VinsonCheckUpgrade")
+    set(CPACK_NSIS_MODIFY_PATH OFF)
+    set(CPACK_NSIS_MANIFEST_DPI_AWARE ON)
+    set(CPACK_NSIS_MENU_LINKS
+        "THIRD_PARTY_NOTICES.md" "Third-party licenses")
 else()
     set(CPACK_GENERATOR TGZ)
 endif()

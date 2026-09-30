@@ -21,7 +21,7 @@ private slots:
     void framelessEdgesExposeMoveAndResizeCursors();
     void framelessModePreservesTextSelection();
     void minimalModeIsReversibleAndTracksFont();
-    void minimalShortcutsDoNotChangeText();
+    void minimalModeDoesNotChangeText();
 };
 
 void WindowControllerTest::togglesWindowFlagsWithoutLosingSize()
@@ -245,7 +245,7 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
     QVERIFY(controller.isFrameless());
 }
 
-void WindowControllerTest::minimalShortcutsDoNotChangeText()
+void WindowControllerTest::minimalModeDoesNotChangeText()
 {
     QMainWindow window;
     auto* editor = new vinson::EditorWidget(&window);
@@ -260,14 +260,13 @@ void WindowControllerTest::minimalShortcutsDoNotChangeText()
     QSignalSpy minimalSpy(&controller,
                           &vinson::WindowController::minimalModeChanged);
 
-    QTest::keyClick(editor, Qt::Key_M,
-                    Qt::ControlModifier | Qt::ShiftModifier);
+    controller.setMinimalMode(true);
     QVERIFY(controller.isMinimalMode());
     editor->setSel(editor->documentLength(), editor->documentLength());
     QTest::keyClicks(editor, QStringLiteral("!"));
     QTRY_COMPARE(editor->textUtf8(), QByteArray("unsaved text remains safe!"));
     QVERIFY(editor->modify());
-    QTest::keyClick(editor, Qt::Key_Escape);
+    controller.setMinimalMode(false);
     QVERIFY(!controller.isMinimalMode());
 
     QCOMPARE(minimalSpy.count(), 2);

@@ -6,6 +6,7 @@
 #include "largefile/LargeFilePolicy.h"
 
 #include <QFile>
+#include <QCryptographicHash>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -92,6 +93,7 @@ private slots:
     void canceledSavePreservesSource();
     void tracksDocumentState();
     void fileManagerLoadsAsynchronously();
+    void largeLoadSkipsContentFingerprint();
     void fileManagerSavesAsynchronously();
     void classifiesLargeFileBoundaries();
     void fileManagerStreamsSaveAsynchronously();
@@ -309,6 +311,20 @@ void FileCoreTest::tracksDocumentState()
     QVERIFY(!document.isModified());
     document.setModified(true);
     QVERIFY(document.isModified());
+    document.setModified(false);
+    document.setEncoding(vinson::TextEncoding::Utf16Be);
+    QVERIFY(document.isModified());
+    document.setModified(false);
+    QVERIFY(document.isModified());
+    document.setEncoding(vinson::TextEncoding::Utf8Bom);
+    QVERIFY(!document.isModified());
+    document.setEncoding(vinson::TextEncoding::Utf16Le);
+    document.adoptSavedFile({document.path(), vinson::TextEncoding::Utf16Le, 84});
+    QVERIFY(!document.isModified());
+    document.setEncoding(vinson::TextEncoding::Utf8);
+    QVERIFY(document.isModified());
+    document.reset();
+    QVERIFY(!document.isModified());
 }
 
 void FileCoreTest::fileManagerLoadsAsynchronously()
@@ -352,6 +368,23 @@ void FileCoreTest::fileManagerLoadsAsynchronously()
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QCOMPARE(loadedText, source);
     QCOMPARE(loadedInfo.lineEnding, vinson::LineEnding::Lf);
+    QVERIFY(loadedInfo.modifiedAt.isValid());
+    QCOMPARE(loadedInfo.contentHash,
+             QCryptographicHash::hash(source, QCryptographicHash::Sha256));
+}
+
+void FileCoreTest::largeLoadSkipsContentFingerprint()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const QString path = directory.filePath(QStringLiteral("large-hash.txt"));
+    const QByteArray source(vinson::maximumContentFingerprintBytes + 1, 'x');
+    writeFixture(path, source);
+
+    const LoadedFile loaded = loadFile(path);
+    QVERIFY2(loaded.completed, qPrintable(loaded.error));
+    QCOMPARE(loaded.text, source);
+    QVERIFY(loaded.info.contentHash.isEmpty());
 }
 
 void FileCoreTest::fileManagerSavesAsynchronously()
