@@ -622,7 +622,7 @@ MainWindow::MainWindow(QWidget* parent, bool restorePersistentState)
                     appearance, windowController_->isFrameless());
             });
     connect(themeManager_, &ThemeManager::appearanceChanged,
-            windowController_, &WindowController::refreshMinimalMinimumSize);
+            windowController_, &WindowController::refreshMinimumSize);
     connect(windowController_, &WindowController::framelessChanged,
             themeManager_, &ThemeManager::setFramelessMode);
     connect(windowController_, &WindowController::framelessChanged,

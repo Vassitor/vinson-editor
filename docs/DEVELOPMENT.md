@@ -11,8 +11,8 @@ rejects 32-bit configurations.
 Minimum development requirements are CMake 3.25, Ninja, a C++20 compiler, and
 Qt 6.5 with Core, Gui, Widgets, Test, and Core5Compat. Qt Linguist Tools is
 optional; when installed, it compiles bundled translations and enables the
-localization test. Phase 0 was initialized on Ubuntu 26.04 x86_64 with GCC
-15.2.0. Ubuntu's current packages provide CMake 4.2.3 and Qt 6.10.2.
+localization test. Recorded benchmark environments and measurements are listed
+in [PERFORMANCE.md](PERFORMANCE.md).
 
 Ubuntu setup:
 
@@ -44,14 +44,13 @@ Qt installation prefix before configuring.
 
 ## Third-party source policy
 
-`third_party/scintilla` is the official Scintilla 5.6.6 source release and
-`third_party/lexilla` is the official Lexilla 5.5.3 source release. Keep their
-trees unmodified so upstream upgrades remain reviewable. Project-specific build
+`third_party/scintilla` is the official Scintilla 5.6.6 source release. Keep its
+tree unmodified so upstream upgrades remain reviewable. Project-specific build
 logic belongs in `cmake/`. The RGBA foreground/background adaptation is generated under
 `build/<preset>/generated/scintilla`; never apply it directly to the vendored
 source.
 
-When upgrading either dependency:
+When upgrading Scintilla:
 
 1. Download a stable release from `scintilla.org`.
 2. Verify the release version and retain its upstream license.
@@ -61,16 +60,31 @@ When upgrading either dependency:
 
 ## Repository layout
 
-- `src/app`: application lifetime and startup
+- `CMakeLists.txt`: toolchain requirements, build options, and subdirectory wiring
+- `src/CMakeLists.txt`: application libraries, executable, resources, and translations
+- `src/app`: entry point, application lifetime, and single-instance startup
 - `src/window`: top-level windows and window-mode control
 - `src/editor`: Scintilla-facing editor abstractions
 - `src/file`: encoding/EOL detection, bounded asynchronous loading, and atomic saving
 - `src/largefile`: centralized thresholds and large-document behavior
-- `src/search`: search/replace orchestration (Phase 3)
+- `src/search`: search/replace orchestration
+- `src/session`: recent/closed-document history and recovery snapshots
 - `src/settings`: appearance themes and validated `QSettings` persistence
 - `src/ui`: focused dialogs and reusable UI pieces
-- `tests`: Qt Test and CTest targets
-- `scripts`: repeatable release packaging entry points
+- `tests`: Qt Test sources, shared CTest registration, and test runtime deployment
+- `benchmarks`: manual large-file performance harness and its CMake target
+- `cmake`: Scintilla integration, version/launcher templates, and release packaging
+- `resources`: translations, icons, and Windows application/installer resources
+- `scripts`: repeatable packaging, deployment, and license-generation entry points
+- `docs`: current documentation; `docs/design` contains the archived original specification
+- `third_party`: pinned upstream sources
+- `licenses`: upstream notices, SPDX inventories, and license texts
+
+`build/` and `.build-tools/` are local generated directories and are ignored by
+Git. Keep test reports, preview executables, and other temporary outputs under
+`build/`. Python bytecode is ignored throughout the repository. Configure with
+`-DVINSON_BUILD_BENCHMARKS=OFF` to omit the manual benchmark target, or
+`-DVINSON_BUILD_TESTS=OFF` to omit automated tests.
 
 ## Automated tests
 
@@ -103,7 +117,7 @@ changing its content.
 `appearance_tests` verifies live font/alpha previews, style application without
 document mutation, translucent editor-text pixels, and alpha-zero backgrounds.
 `window_controller_tests` verifies composable window flags, geometry retention,
-frameless resize cursors, and real Scintilla text selection with the window
+frameless one-line minimum heights, resize cursors, and real Scintilla text selection with the window
 event filter active. It also verifies reversible minimal-mode UI state,
 font-derived one-line sizing, prior-frameless restoration, and safe keyboard
 entry/exit while preserving edits made in minimal mode.

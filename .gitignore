@@ -15,6 +15,11 @@ CMakeUserPresets.json
 .vscode/
 *.user
 
+# Generated Python bytecode and local test reports
+__pycache__/
+*.py[cod]
+/test-output*.txt
+
 # Platform files
 .DS_Store
 Thumbs.db

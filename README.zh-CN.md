@@ -39,17 +39,13 @@ Vinson Editor 是一款使用 C++20、Qt 6 Widgets 和 Scintilla 构建的轻量
 - 保存多套命名自定义样式，并可为每套样式设置切换快捷键或通过 JSON 导入、导出
 - 背景与文字不透明度可分别调整：0 为完全透明，255 为不透明；背景不透明度仅在无边框和极简模式下生效
 - 可配置系统级老板键，以及用于显示、还原并激活窗口后聚焦编辑区以便立即输入的聚焦快捷键
-- 无边框模式支持拖动顶部边缘或使用 `Alt+鼠标左键拖动` 进行系统移动，并支持边缘缩放
+- 无边框模式支持拖动顶部边缘或使用 `Alt+鼠标左键拖动` 进行系统移动，支持边缘缩放，最小高度随字号和行距调整，可缩小到一行
 - 可与无边框模式组合使用的窗口置顶模式
 - 极简模式隐藏全部窗口装饰，并允许动态缩小为单行窗口
 - 使用 `Ctrl+Shift+M` 或 `Esc` 退出极简模式，且不会改变文档内容
 - 仅支持 64 位的 CMake 配置，提供 Debug 和 Release 预设
 - 支持无界面的 Qt Test 测试及应用启动冒烟测试
 - 使用 CPack 生成包含 Qt Runtime 和 SHA-256 校验和的便携归档包
-
-## 截图
-
-> 截图占位：首个带标签的二进制版本发布时将补充 Windows 便携版截图。
 
 ## 依赖
 
@@ -59,7 +55,7 @@ Vinson Editor 是一款使用 C++20、Qt 6 Widgets 和 Scintilla 构建的轻量
 - Qt 6.5+，包含 Widgets、Test 和 Core5Compat
 - Qt Linguist Tools（可选；编译内置翻译时需要）
 
-Scintilla 5.6.6 和 Lexilla 5.5.3 的官方发布源码已包含在 `third_party/` 中。Lexilla 当前仅固定版本，待引入 lexer 支持时再链接；目前编辑器有意保持纯文本模式。
+Scintilla 5.6.6 的官方发布源码已包含在 `third_party/` 中。当前编辑器使用纯文本模式，无需额外的词法分析器库。
 
 在 Ubuntu 26.04 上安装开发依赖：
 
@@ -161,8 +157,13 @@ Windows 包会自动运行 `windeployqt`，无需 Qt SDK 即可启动。包内�
 | 极简模式 | `Ctrl+Shift+M` |
 | 退出极简模式 | `Esc` 或 `Ctrl+Shift+M` |
 
+## 文档导航
+
+[文档索引](docs/README.md)汇总开发指南、架构说明、性能记录和发布步骤。
+应用源码位于 `src/`，手动性能基准位于 `benchmarks/`，依赖集成和发布配置位于 `cmake/`。
+
 ## 许可证
 
-项目代码使用 MIT 许可证。Scintilla 和 Lexilla 分别保留其 `third_party` 目录中的上游许可证。
+项目代码使用 MIT 许可证。Scintilla 的上游许可证保留在 `third_party/scintilla/License.txt` 中。
 第三方版权声明、Qt SDK 组件清单及许可证全文见
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，发布包会一并包含这些文件。

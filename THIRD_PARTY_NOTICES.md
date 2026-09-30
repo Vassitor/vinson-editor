@@ -7,10 +7,9 @@ Vinson Editor 的项目代码采用 [MIT License](LICENSE)。第三方组件保�
 | 组件 | 版本 | 用途 | 许可证及声明 |
 | --- | --- | --- | --- |
 | Scintilla | 5.6.6 | 静态编译的文本编辑控件 | [上游许可证全文](licenses/Scintilla.txt) |
-| Lexilla | 5.5.3 | 仓库附带的词法分析器源码；当前 CMake 未链接 | [上游许可证全文](licenses/Lexilla.txt) |
 | Qt | 本次清单为 6.8.3 | 动态链接 Core、Gui、Widgets、Core5Compat；部署工具还可能携带 Network、Svg 及平台、样式、图像插件、翻译 | [组件版权清单](licenses/qt/NOTICES.md)、[LGPL v3](licenses/texts/LGPL-3.0-only.txt)、[GPL v3](licenses/texts/GPL-3.0-only.txt) |
 
-Scintilla 和 Lexilla 的来源版本及归档校验值见 [third_party/README.md](third_party/README.md)（源码仓库中）。
+Scintilla 的来源版本及归档校验值见 [third_party/README.md](third_party/README.md)（源码仓库中）。
 
 Qt 的不同文件与内含组件可能采用不同许可条件。完整的上游许可表达式、版权声明及组件来源保存在 `licenses/qt/` 的 SPDX JSON 中；许可证全文在 `licenses/texts/` 中。清单保留上游的许可备选项，不表示项目已获得 Qt 商业许可。
 
@@ -38,4 +37,4 @@ Qt 官方资料：[许可说明](https://doc.qt.io/qt-6.8/licensing.html)、[Qt 
 
 ---
 
-Vinson Editor is MIT licensed. Third-party software retains its own copyrights and license terms. The bundled notices cover Scintilla 5.6.6, vendored but currently unlinked Lexilla 5.5.3, and the listed Qt 6.8.3 SDK module inventories. These inventories are a conservative module-level superset, not a binary dependency audit. Separate Windows graphics and compiler runtimes require notices from their actual distribution packages. Original copyright notices, SPDX metadata, license texts and provenance are provided in `licenses/`.
+Vinson Editor is MIT licensed. Third-party software retains its own copyrights and license terms. The bundled notices cover Scintilla 5.6.6 and the listed Qt 6.8.3 SDK module inventories. These inventories are a conservative module-level superset, not a binary dependency audit. Separate Windows graphics and compiler runtimes require notices from their actual distribution packages. Original copyright notices, SPDX metadata, license texts and provenance are provided in `licenses/`.

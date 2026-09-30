@@ -9,6 +9,8 @@ the Semantic Versioning scheme.
 
 ### Fixed
 
+- Frameless windows can shrink to one Scintilla line, track font size and line
+  spacing, and restore the previous minimum sizes when returning to framed mode.
 - Saving checks the disk file against the loaded version using size and
   modification time, plus a SHA-256 content fingerprint for files up to 8 MiB.
   Changed or unverifiable files require confirmation before overwrite.
@@ -55,6 +57,10 @@ the Semantic Versioning scheme.
 
 ### Changed
 
+- Separated application, benchmark, and release CMake configuration; grouped
+  startup sources under `src/app` and manual performance tools under `benchmarks`.
+- Removed the unused Lexilla source tree, tracked Python bytecode, and an obsolete
+  test report. Added documentation navigation and archived the initial specification.
 - Made every application keyboard shortcut editable and persistent, including
   entering and exiting minimal mode, and changed the settings dialog background
   to white.

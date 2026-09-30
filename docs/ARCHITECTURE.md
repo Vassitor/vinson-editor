@@ -94,6 +94,11 @@ editor mouse events pass through unchanged, preserving text selection. The top
 border is also a direct move target, while corners and other edges resize. F11
 remains attached to the main window while its system frame is absent.
 
+Frameless mode replaces the editor's padded minimum height with the actual
+Scintilla line height, including configured line spacing. It refreshes nested
+layout minima and preserves room for visible panels. Appearance changes update
+the minimum height; leaving frameless mode restores the captured size limits.
+
 Minimal mode is another reversible `WindowController` state. On entry the
 controller snapshots the prior frame, menu/status/find-panel visibility, line
 numbers, scrollbars, minimum sizes, and normal window geometry. It then hides chrome, enables
@@ -167,9 +172,8 @@ Application targets use C++20. The unmodified Scintilla target is compiled as
 C++17, matching its upstream requirement and keeping upstream C++17 constructs
 from producing C++20 deprecation diagnostics.
 
-Lexilla 5.5.3 is pinned beside Scintilla but is not linked yet. Plain
-text requires no lexer, and delaying the Lexilla target avoids enabling costly
-styling before the large-file policy is in place.
+Plain-text editing requires no lexer library. Syntax support can introduce a
+lexer dependency when it has an application target and a defined large-file policy.
 
 Dependencies point toward application-neutral models and services. Only
 `EditorWidget` on the GUI thread may mutate the Scintilla control.

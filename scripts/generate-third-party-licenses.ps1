@@ -70,5 +70,4 @@ foreach ($id in $ids) {
 [IO.File]::WriteAllText("$destination/qt/NOTICES.md", $report.ToString(), $encoding)
 [IO.File]::WriteAllText("$destination/SOURCES.md", $manifest.ToString(), $encoding)
 Copy-Item -LiteralPath "$repository/third_party/scintilla/License.txt" -Destination "$destination/Scintilla.txt"
-Copy-Item -LiteralPath "$repository/third_party/lexilla/License.txt" -Destination "$destination/Lexilla.txt"
 Write-Host "Generated third-party notices and $($ids.Count - 1) license texts in $destination"

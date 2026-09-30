@@ -40,6 +40,7 @@
 
 
 #include <algorithm>
+#include <cmath>
 
 #if defined(Q_OS_WIN)
 #include <qt_windows.h>
@@ -59,6 +60,7 @@ private slots:
     void restoresPersistedApplicationState();
     void restoresAndUsesCustomApplicationShortcuts();
     void framelessShortcutRemainsAvailableWithHiddenMenuBar();
+    void framelessWindowShrinksToOneLineAndTracksAppearance();
     void backgroundOpacityShortcutsArePersistent();
     void controlWheelFontSizeIsPersistent();
     void switchesPersistedCustomStyles();
@@ -545,6 +547,55 @@ void MainWindowPersistenceTest::framelessShortcutRemainsAvailableWithHiddenMenuB
     QTRY_VERIFY(window.statusBar()->isVisible());
     QVERIFY(window.statusBar()->height() > 0);
     QVERIFY(window.rect().intersects(window.statusBar()->geometry()));
+    QVERIFY(window.statusBar()->geometry().bottom() <= window.rect().bottom());
+}
+
+void MainWindowPersistenceTest::framelessWindowShrinksToOneLineAndTracksAppearance()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    useSettingsDirectory(directory.path());
+    vinson::MainWindow window;
+    auto* editor = window.findChild<vinson::EditorWidget*>();
+    auto* controller = window.findChild<vinson::WindowController*>();
+    auto* theme = window.findChild<vinson::ThemeManager*>();
+    QVERIFY(editor != nullptr);
+    QVERIFY(controller != nullptr);
+    QVERIFY(theme != nullptr);
+    window.show();
+    QCoreApplication::processEvents();
+    controller->setFrameless(true);
+    QCoreApplication::processEvents();
+    int lineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
+    QCOMPARE(window.minimumHeight(), lineHeight);
+    window.resize(400, lineHeight);
+    QCoreApplication::processEvents();
+    QCOMPARE(window.height(), lineHeight);
+    QCOMPARE(editor->viewport()->height(), lineHeight);
+
+    auto appearance = theme->appearance();
+    appearance.font.setPointSizeF(24.0);
+    appearance.lineSpacing = 8;
+    theme->applyAppearance(appearance);
+    lineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
+    QCOMPARE(window.minimumHeight(), lineHeight);
+    window.resize(400, lineHeight);
+    QCoreApplication::processEvents();
+    QCOMPARE(window.height(), lineHeight);
+    QCOMPARE(editor->viewport()->height(), lineHeight);
+
+    appearance.font.setPointSizeF(10.0);
+    appearance.lineSpacing = 0;
+    theme->applyAppearance(appearance);
+    lineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
+    QCOMPARE(window.minimumHeight(), lineHeight);
+    window.resize(400, lineHeight);
+    QCoreApplication::processEvents();
+    QCOMPARE(editor->viewport()->height(), lineHeight);
+
+    controller->setFrameless(false);
+    QTRY_VERIFY(window.menuBar()->isVisible());
+    QTRY_VERIFY(window.statusBar()->isVisible());
     QVERIFY(window.statusBar()->geometry().bottom() <= window.rect().bottom());
 }
 

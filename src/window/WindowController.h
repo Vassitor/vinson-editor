@@ -36,7 +36,7 @@ public slots:
     void toggleAlwaysOnTop();
     void setMinimalMode(bool enabled);
     void toggleMinimalMode();
-    void refreshMinimalMinimumSize();
+    void refreshMinimumSize();
 
 signals:
     void framelessChanged(bool enabled);
@@ -59,6 +59,8 @@ private:
 
     struct FramelessUiState
     {
+        QSize windowMinimumSize;
+        QSize editorMinimumSize;
         bool menuBarVisible = true;
         bool statusBarVisible = true;
         bool valid = false;

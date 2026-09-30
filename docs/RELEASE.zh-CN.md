@@ -14,7 +14,7 @@
 
 在 CPack 安装阶段，Qt CMake 部署 API 会运行 `windeployqt`，把所需 Qt DLL、编译器运行库、`qt.conf` 和平台插件放到应用旁边。生成的 ZIP 和 `.sha256` 文件位于 `build/release/packages/` 下独立的时间戳目录中，因此即使旧 ZIP 正被资源管理器或其他程序打开，也不会阻塞新包生成。脚本完成时会输出最终产物路径和哈希值。
 
-Scintilla 会静态编译进 `vinson-editor.exe`。Lexilla 已为未来语法支持固定版本，但当前纯文本版本不会链接它，因此两者都不需要单独的运行时 DLL。
+Scintilla 会静态编译进 `vinson-editor.exe`，无需单独的运行时 DLL。当前纯文本版本没有词法分析器库依赖。
 
 发布归档同时包含英文和简体中文的 README、变更日志及 `docs/` 文档。只有安装 Qt Linguist Tools 时才会编译应用内置翻译；正式发布环境应安装该组件，以确保简体中文界面和本地化测试包含在发布门禁中。
 

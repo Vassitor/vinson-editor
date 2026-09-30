@@ -20,6 +20,7 @@ private slots:
     void framelessModeHidesChromeAndRestoresScrollBars();
     void framelessEdgesExposeMoveAndResizeCursors();
     void framelessModePreservesTextSelection();
+    void framelessModeShrinksToOneLineAndRestoresMinimumSize();
     void minimalModeIsReversibleAndTracksFont();
     void minimalModeDoesNotChangeText();
 };
@@ -156,6 +157,73 @@ void WindowControllerTest::framelessModePreservesTextSelection()
     QVERIFY(!editor->selectedTextUtf8().isEmpty());
 }
 
+void WindowControllerTest::framelessModeShrinksToOneLineAndRestoresMinimumSize()
+{
+    QMainWindow window;
+    auto* central = new QWidget(&window);
+    auto* editor = new vinson::EditorWidget(central);
+    auto* layout = new QVBoxLayout(central);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(editor);
+    window.setCentralWidget(central);
+    window.menuBar()->addMenu(QStringLiteral("Menu"));
+    window.statusBar()->showMessage(QStringLiteral("Status"));
+    window.setMinimumSize(240, 180);
+    editor->setMinimumSize(100, 80);
+    const QByteArray text("first line\nsecond line");
+    editor->setTextUtf8(text);
+    window.resize(640, 360);
+    window.show();
+    QCoreApplication::processEvents();
+    vinson::WindowController controller(&window);
+    controller.configureMinimalMode(editor, nullptr);
+    const QSize originalWindowMinimum = window.minimumSize();
+    const QSize originalEditorMinimum = editor->minimumSize();
+
+    controller.setFrameless(true);
+    QCoreApplication::processEvents();
+    const int lineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
+    QCOMPARE(window.minimumHeight(), lineHeight);
+    QCOMPARE(editor->minimumHeight(), lineHeight);
+    window.resize(320, lineHeight);
+    QCoreApplication::processEvents();
+    QCOMPARE(window.height(), lineHeight);
+    QCOMPARE(editor->viewport()->height(), lineHeight);
+    QVERIFY(editor->pointYFromPosition(text.indexOf('\n') + 1)
+            >= editor->viewport()->height());
+    QVERIFY(editor->areLineNumbersVisible());
+    QVERIFY(editor->vScrollBar());
+
+    QFont font = editor->editorFont();
+    font.setPointSizeF(24.0);
+    editor->setEditorFont(font);
+    controller.refreshMinimumSize();
+    const int largerLineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
+    QVERIFY(largerLineHeight > lineHeight);
+    QCOMPARE(window.minimumHeight(), largerLineHeight);
+    window.resize(320, largerLineHeight);
+    QCoreApplication::processEvents();
+    QCOMPARE(editor->viewport()->height(), largerLineHeight);
+
+    controller.setMinimalMode(true);
+    font.setPointSizeF(28.0);
+    editor->setEditorFont(font);
+    controller.refreshMinimumSize();
+    controller.setMinimalMode(false);
+    QVERIFY(controller.isFrameless());
+    QCOMPARE(window.minimumHeight(),
+             static_cast<int>(std::ceil(editor->textHeightF(0))));
+    controller.setFrameless(false);
+    QCoreApplication::processEvents();
+    QCOMPARE(window.minimumSize(), originalWindowMinimum);
+    QCOMPARE(editor->minimumSize(), originalEditorMinimum);
+    QVERIFY(window.menuBar()->isVisible());
+    QVERIFY(window.statusBar()->isVisible());
+    QCOMPARE(editor->textUtf8(), text);
+    QVERIFY(!editor->modify());
+}
+
 void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
 {
     QMainWindow window;
@@ -218,7 +286,7 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
     QFont largerFont = editor->editorFont();
     largerFont.setPointSizeF(24.0);
     editor->setEditorFont(largerFont);
-    controller.refreshMinimalMinimumSize();
+    controller.refreshMinimumSize();
     QVERIFY(window.minimumHeight() > initialLineHeight);
 
     controller.setMinimalMode(false);

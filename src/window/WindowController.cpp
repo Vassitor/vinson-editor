@@ -116,6 +116,8 @@ void WindowController::setFrameless(bool enabled)
     bool statusBarVisible = false;
     if (enabled) {
         framelessUiState_ = {
+            window_->minimumSize(),
+            editor_ != nullptr ? editor_->minimumSize() : QSize{},
             !window_->menuBar()->isHidden(),
             !window_->statusBar()->isHidden(),
             true,
@@ -126,6 +128,10 @@ void WindowController::setFrameless(bool enabled)
         restoreChrome = true;
         menuBarVisible = framelessUiState_.menuBarVisible;
         statusBarVisible = framelessUiState_.statusBarVisible;
+        window_->setMinimumSize(framelessUiState_.windowMinimumSize);
+        if (editor_ != nullptr) {
+            editor_->setMinimumSize(framelessUiState_.editorMinimumSize);
+        }
 
         // Restore child visibility before Qt recreates and shows the native
         // framed window. QMainWindow then includes both bars in its first
@@ -198,6 +204,7 @@ void WindowController::setFrameless(bool enabled)
             });
     }
     emit framelessChanged(enabled);
+    refreshMinimumSize();
 }
 
 void WindowController::toggleFrameless()
@@ -247,7 +254,7 @@ void WindowController::setMinimalMode(bool enabled)
         editor_->setLineNumbersVisible(false);
         editor_->setHScrollBar(false);
         editor_->setVScrollBar(false);
-        refreshMinimalMinimumSize();
+        refreshMinimumSize();
     } else {
         minimalMode_ = false;
         window_->setMinimumSize(minimalUiState_.windowMinimumSize);
@@ -264,6 +271,7 @@ void WindowController::setMinimalMode(bool enabled)
         if (!minimalUiState_.windowGeometry.isEmpty()) {
             window_->restoreGeometry(minimalUiState_.windowGeometry);
         }
+        refreshMinimumSize();
     }
     emit minimalModeChanged(enabled);
 }
@@ -273,9 +281,9 @@ void WindowController::toggleMinimalMode()
     setMinimalMode(!minimalMode_);
 }
 
-void WindowController::refreshMinimalMinimumSize()
+void WindowController::refreshMinimumSize()
 {
-    if (!minimalMode_ || editor_ == nullptr) {
+    if (!frameless_ || editor_ == nullptr) {
         return;
     }
     const QFontMetricsF metrics(editor_->editorFont());
@@ -284,8 +292,27 @@ void WindowController::refreshMinimalMinimumSize()
     const int minimumWidth = std::max(80,
         static_cast<int>(std::ceil(metrics.horizontalAdvance(
             QStringLiteral("MMMM")))) + 8);
-    editor_->setMinimumSize(0, lineHeight);
-    window_->setMinimumSize(minimumWidth, lineHeight);
+    if (minimalMode_) {
+        editor_->setMinimumSize(0, lineHeight);
+        window_->setMinimumSize(minimumWidth, lineHeight);
+    } else {
+        // Override the editor's padded minimumSizeHint with its actual line
+        // height. Include any visible panels in the window's layout minimum.
+        editor_->setMinimumHeight(lineHeight);
+        for (QWidget* parent = editor_->parentWidget(); parent != nullptr;
+             parent = parent->parentWidget()) {
+            if (parent->layout() != nullptr) {
+                parent->layout()->invalidate();
+                parent->layout()->activate();
+            }
+            if (parent == window_) {
+                break;
+            }
+        }
+        const int layoutHeight = window_->layout() != nullptr
+            ? window_->layout()->totalMinimumSize().height() : 0;
+        window_->setMinimumHeight(std::max(lineHeight, layoutHeight));
+    }
 }
 
 bool WindowController::eventFilter(QObject* watched, QEvent* event)

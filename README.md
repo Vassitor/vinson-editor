@@ -46,18 +46,13 @@ modes, and a specialized large-document path.
   Background opacity applies in frameless and minimal modes.
 - Configurable system-wide boss key plus a focus shortcut that shows, restores,
   and activates the window, then focuses the editor for immediate typing
-- Frameless mode with top-border or `Alt+Left Drag` system movement and edge resizing
+- Frameless mode with top-border or `Alt+Left Drag` system movement, edge resizing, and a one-line minimum height that follows font size and line spacing
 - Always-on-top mode, composable with frameless mode
 - Minimal mode hides all chrome and allows a dynamically sized one-line window
 - Minimal-mode exit through `Ctrl+Shift+M` or `Esc` without changing document data
 - 64-bit-only CMake configuration with Debug and Release presets
 - Headless Qt Test coverage and an application smoke-test mode
 - CPack portable archives with Qt Runtime deployment and SHA-256 checksums
-
-## Screenshot
-
-> Screenshot placeholder: a Windows portable-build capture will be added with
-> the first tagged binary release.
 
 ## Dependencies
 
@@ -67,9 +62,8 @@ modes, and a specialized large-document path.
 - Qt 6.5+ with Widgets, Test, and Core5Compat
 - Qt Linguist Tools (optional; required to compile the bundled translations)
 
-Scintilla 5.6.6 and Lexilla 5.5.3 are vendored under `third_party/` from their
-official source releases. Lexilla is pinned now and will be linked when lexer
-support is introduced; the current editor deliberately uses plain-text mode.
+Scintilla 5.6.6 is vendored under `third_party/` from its official source
+release. The editor uses plain-text mode and does not require a lexer library.
 
 On Ubuntu 26.04, install the development dependencies with:
 
@@ -175,9 +169,16 @@ after stopping it successfully. Uninstalling retains user settings
 and documents. The existing `package-windows.ps1` continues to produce portable ZIPs.
 The confirmation warns that stopping the running process can discard unsaved content.
 
+## Documentation
+
+See the [documentation index](docs/README.md) for development, architecture,
+performance measurements, and release instructions. Application sources live
+under `src/`, manual performance tools under `benchmarks/`, and dependency and
+packaging integration under `cmake/`.
+
 ## License
 
-Project code is licensed under the MIT License. Scintilla and Lexilla retain
-their upstream licenses in their respective `third_party` directories.
+Project code is licensed under the MIT License. Scintilla retains its upstream
+license in `third_party/scintilla/License.txt`.
 Third-party copyright notices, Qt SDK inventories, and license texts are listed
 in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and included in release packages.

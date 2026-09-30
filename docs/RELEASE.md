@@ -28,9 +28,8 @@ output directories allow a new package to be built even while an earlier ZIP
 is open in Explorer or another application. The final artifact paths and hash
 are printed when the script completes.
 
-Scintilla is compiled statically into `vinson-editor.exe`. Lexilla is pinned for
-future syntax support but is not linked by this plain-text release, so neither
-component needs a separate runtime DLL.
+Scintilla is compiled statically into `vinson-editor.exe` and needs no separate
+runtime DLL. This plain-text release has no lexer-library dependency.
 
 Release archives include the English and Simplified Chinese README, changelog,
 and `docs/` documentation. Qt Linguist Tools must be installed in the release
