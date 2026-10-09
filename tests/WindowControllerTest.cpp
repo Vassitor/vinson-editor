@@ -18,6 +18,8 @@ class WindowControllerTest final : public QObject
 private slots:
     void togglesWindowFlagsWithoutLosingSize();
     void framelessModeHidesChromeAndRestoresScrollBars();
+    void framelessModeKeepsEffectiveEditorHeight_data();
+    void framelessModeKeepsEffectiveEditorHeight();
     void framelessEdgesExposeMoveAndResizeCursors();
     void framelessModePreservesTextSelection();
     void framelessModeShrinksToOneLineAndRestoresMinimumSize();
@@ -101,6 +103,62 @@ void WindowControllerTest::framelessModeHidesChromeAndRestoresScrollBars()
     QVERIFY(editor->verticalScrollBar()->isVisible());
 }
 
+void WindowControllerTest::framelessModeKeepsEffectiveEditorHeight_data()
+{
+    QTest::addColumn<bool>("panelVisible");
+    QTest::addColumn<int>("titleHeight");
+    QTest::newRow("editor-only") << false << 0;
+    QTest::newRow("visible-find-panel") << true << 0;
+    QTest::newRow("custom-title-bar") << false << 44;
+    QTest::newRow("title-bar-and-find-panel") << true << 44;
+}
+
+void WindowControllerTest::framelessModeKeepsEffectiveEditorHeight()
+{
+    QFETCH(bool, panelVisible);
+    QFETCH(int, titleHeight);
+    QMainWindow window;
+    auto* central = new QWidget(&window);
+    auto* layout = new QVBoxLayout(central);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    auto* panel = new QWidget(central);
+    panel->setFixedHeight(28);
+    auto* editor = new vinson::EditorWidget(central);
+    editor->setTextUtf8("first line\nsecond line");
+    layout->addWidget(panel);
+    layout->addWidget(editor, 1);
+    panel->setVisible(panelVisible);
+    window.setCentralWidget(central);
+    window.menuBar()->addMenu(QStringLiteral("Menu"));
+    window.statusBar()->showMessage(QStringLiteral("Status"));
+    window.setContentsMargins(0, titleHeight, 0, 0);
+    window.resize(640, 360);
+    window.show();
+    QCoreApplication::processEvents();
+    vinson::WindowController controller(&window);
+    controller.configureMinimalMode(editor, panel);
+    connect(&controller, &vinson::WindowController::framelessChanged,
+            &window, [&window, titleHeight](bool enabled) {
+                window.setContentsMargins(0, enabled ? 0 : titleHeight, 0, 0);
+            });
+    const QSize framedSize = window.size();
+    const int editorHeight = editor->viewport()->height();
+    QVERIFY(editorHeight < framedSize.height());
+    for (int cycle = 0; cycle < 3; ++cycle) {
+        controller.setFrameless(true);
+        QTRY_COMPARE(window.height(), editorHeight + (panelVisible ? panel->height() : 0));
+        QTRY_COMPARE(editor->viewport()->height(), editorHeight);
+        QCOMPARE(window.width(), framedSize.width());
+        QCOMPARE(panel->isVisible(), panelVisible);
+        controller.setFrameless(false);
+        QTRY_COMPARE(editor->viewport()->height(), editorHeight);
+        QTRY_COMPARE(window.size(), framedSize);
+    }
+    QCOMPARE(editor->textUtf8(), QByteArray("first line\nsecond line"));
+    QVERIFY(!editor->modify());
+}
+
 void WindowControllerTest::framelessEdgesExposeMoveAndResizeCursors()
 {
     QMainWindow window;
@@ -180,14 +238,18 @@ void WindowControllerTest::framelessModeShrinksToOneLineAndRestoresMinimumSize()
     controller.configureMinimalMode(editor, nullptr);
     const QSize originalWindowMinimum = window.minimumSize();
     const QSize originalEditorMinimum = editor->minimumSize();
+    window.resize(100, window.height());
+    QCOMPARE(window.width(), 250);
+    window.resize(640, 360);
 
     controller.setFrameless(true);
     QCoreApplication::processEvents();
     const int lineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
     QCOMPARE(window.minimumHeight(), lineHeight);
     QCOMPARE(editor->minimumHeight(), lineHeight);
-    window.resize(320, lineHeight);
+    window.resize(100, lineHeight);
     QCoreApplication::processEvents();
+    QCOMPARE(window.width(), 100);
     QCOMPARE(window.height(), lineHeight);
     QCOMPARE(editor->viewport()->height(), lineHeight);
     QVERIFY(editor->pointYFromPosition(text.indexOf('\n') + 1)
@@ -217,6 +279,8 @@ void WindowControllerTest::framelessModeShrinksToOneLineAndRestoresMinimumSize()
     controller.setFrameless(false);
     QCoreApplication::processEvents();
     QCOMPARE(window.minimumSize(), originalWindowMinimum);
+    window.resize(100, window.height());
+    QCOMPARE(window.width(), 250);
     QCOMPARE(editor->minimumSize(), originalEditorMinimum);
     QVERIFY(window.menuBar()->isVisible());
     QVERIFY(window.statusBar()->isVisible());
@@ -275,8 +339,9 @@ void WindowControllerTest::minimalModeIsReversibleAndTracksFont()
         std::ceil(editor->textHeightF(0)));
     QCOMPARE(window.minimumHeight(), initialLineHeight);
     QCOMPARE(editor->minimumHeight(), initialLineHeight);
-    window.resize(window.minimumWidth(), window.minimumHeight());
+    window.resize(100, window.minimumHeight());
     QCoreApplication::processEvents();
+    QCOMPARE(window.width(), 100);
     QCOMPARE(window.height(), initialLineHeight);
     QCOMPARE(editor->viewport()->height(), initialLineHeight);
     const qsizetype secondLinePosition = minimalText.indexOf('\n') + 1;

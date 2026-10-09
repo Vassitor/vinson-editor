@@ -26,6 +26,18 @@ the Semantic Versioning scheme.
 
 ### Added
 
+- Preview the bundled plugin developer guide in Chinese or English within the
+  plugin manager. Imports and updates scan suspicious script patterns, explain
+  specific risks with command/line/code locations, and require explicit consent
+  tied to the exact package bytes before installing flagged packages.
+
+- Extend plugin API v1 with generated settings and command parameter forms,
+  persisted shortcuts with conflict checks, line and selection-first inputs,
+  input-range replacement, clipboard and unsaved-tab outputs, and atomic updates
+  preserving preferences and enabled state. Text Tools now includes 11 commands.
+- User-installable JavaScript text plugins with import, enable/disable, uninstall,
+  persisted state, background execution, cancellation, timeout and single-step
+  undo. Includes a Text Tools example and plugin development documentation.
 - Manual per-tab save encoding selection (UTF-8, UTF-8 BOM, UTF-16 LE/BE), with unsaved-change protection for encoding-only changes. LF/CRLF/CR conversion is one undo action; EOL status tracks edits and undo incrementally without rescanning the document.
 - Per-document line bookmarks through Search > Bookmarks, the gutter beside line numbers, or customizable `Ctrl+F2`. `F2`/`Shift+F2` navigate with wrapping and `Ctrl+Shift+F2` clears the current document's marks. Bookmarks follow line edits, remain independent across tabs, and preserve text, modified state, and undo history. Minimal mode hides the symbols while retaining keyboard navigation.
 - Large-file find now schedules one slice at a time with progress and cancellation from the find panel, status bar, or `Esc`. Editing, replacement, and tab switching pause until completion; cancellation preserves text, selection, and undo history.

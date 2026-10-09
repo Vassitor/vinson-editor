@@ -9,6 +9,7 @@ function(vinson_add_test target source library)
 endfunction()
 
 vinson_add_test(editor_widget_tests EditorWidgetTest.cpp vinson_editor_ui)
+vinson_add_test(plugin_manager_tests PluginManagerTest.cpp vinson_editor_ui)
 vinson_add_test(file_core_tests FileCoreTest.cpp vinson_core)
 vinson_add_test(document_history_tests DocumentHistoryTest.cpp vinson_core)
 vinson_add_test(file_change_monitor_tests FileChangeMonitorTest.cpp vinson_core)
@@ -50,6 +51,8 @@ if(WIN32)
             "$<TARGET_FILE:Qt6::Widgets>"
             "$<TARGET_FILE:Qt6::Core5Compat>"
             "$<TARGET_FILE:Qt6::Test>"
+            "$<TARGET_FILE:Qt6::Qml>"
+            "$<TARGET_FILE:Qt6::Network>"
             "${CMAKE_CURRENT_BINARY_DIR}"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
             "$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>"

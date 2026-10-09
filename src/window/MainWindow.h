@@ -41,6 +41,8 @@ class SettingsManager;
 class ThemeManager;
 class WindowController;
 class NativeTitleBar;
+class PluginManager;
+struct PluginCommand;
 
 class MainWindow final : public QMainWindow
 {
@@ -48,7 +50,8 @@ class MainWindow final : public QMainWindow
 
 public:
     explicit MainWindow(QWidget* parent = nullptr,
-                        bool restorePersistentState = true);
+                        bool restorePersistentState = true,
+                        const QString& pluginDirectory = {});
     ~MainWindow() override;
     void setCloseToTrayEnabled(bool enabled) noexcept;
     [[nodiscard]] const QKeySequence& bossKey() const noexcept;
@@ -103,6 +106,9 @@ private:
     };
 
     void createMenus();
+    void rebuildPluginMenu();
+    void refreshPluginShortcuts();
+    void runPluginCommand(const QString& pluginId, const PluginCommand& command);
     void connectFileManager();
     void connectFileChangeMonitor();
     void connectSearch();
@@ -184,6 +190,14 @@ private:
     FindReplaceWidget* findReplaceWidget_ = nullptr;
     ThemeManager* themeManager_ = nullptr;
     SettingsManager* settingsManager_ = nullptr;
+    PluginManager* pluginManager_ = nullptr;
+    QMenu* pluginsMenu_ = nullptr;
+    QVector<QAction*> pluginActions_;
+    qintptr pluginDocumentHandle_ = 0;
+    qint64 pluginSelectionStart_ = 0;
+    qint64 pluginSelectionEnd_ = 0;
+    quint64 documentRevision_ = 0;
+    quint64 pluginDocumentRevision_ = 0;
     WindowController* windowController_ = nullptr;
     NativeTitleBar* nativeTitleBar_ = nullptr;
     QLabel* cursorPositionLabel_ = nullptr;

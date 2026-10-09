@@ -53,6 +53,7 @@ private:
     [[nodiscard]] bool beginSystemResize(Qt::Edges edges);
     void applyWindowFlag(Qt::WindowType flag, bool enabled);
     void refreshEditorScrollBars();
+    void resizeForEditorHeight(int height);
     void updateTaskbarVisibility();
     void updateResizeCursor(QWidget* widget, Qt::Edges edges);
     void clearResizeCursor();
@@ -89,6 +90,7 @@ private:
     bool frameless_ = false;
     bool alwaysOnTop_ = false;
     bool minimalMode_ = false;
+    bool minimalModeTransition_ = false;
     bool taskbarVisible_ = true;
 };
 

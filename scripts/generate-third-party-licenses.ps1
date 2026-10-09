@@ -15,7 +15,7 @@ New-Item -ItemType Directory -Force -Path "$destination/qt", "$destination/texts
 # The SDK SBOM preserves upstream copyright statements and custom license text.
 # Include whole module inventories as a conservative superset, not as a claim
 # that every source component is linked into the application.
-$modules = @('qtbase', 'qt5compat', 'qtsvg', 'qttranslations')
+$modules = @('qtbase', 'qt5compat', 'qtsvg', 'qttranslations', 'qtdeclarative')
 $ids = New-Object 'System.Collections.Generic.SortedSet[string]'
 $report = New-Object System.Text.StringBuilder
 [void]$report.AppendLine("# Qt $QtVersion component notices")

@@ -10,6 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+. (Join-Path $PSScriptRoot "windows-tools.ps1")
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $buildToolsRoot = Join-Path $repositoryRoot ".build-tools"
@@ -35,41 +36,9 @@ function Invoke-Checked {
     }
 }
 
-function Resolve-Executable {
-    param(
-        [string]$Name,
-        [string[]]$Candidates = @()
-    )
-
-    foreach ($candidate in $Candidates) {
-        if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf)) {
-            return (Resolve-Path -LiteralPath $candidate).Path
-        }
-    }
-
-    $command = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue |
-        Select-Object -First 1
-    if ($null -ne $command) {
-        return $command.Source
-    }
-    return $null
-}
-
-function Add-PathDirectory {
-    param([string]$Directory)
-
-    if (!$Directory) {
-        return
-    }
-    $resolved = (Resolve-Path -LiteralPath $Directory).Path
-    $entries = $env:PATH -split [IO.Path]::PathSeparator
-    if ($entries -notcontains $resolved) {
-        $env:PATH = "$resolved$([IO.Path]::PathSeparator)$env:PATH"
-    }
-}
-
 function Find-Python {
     $candidates = @(
+        @{ Program = (Join-Path $buildToolsRoot "Python313\python.exe"); Prefix = @() },
         @{ Program = "py.exe"; Prefix = @("-3") },
         @{ Program = "python.exe"; Prefix = @() },
         @{ Program = "python3.exe"; Prefix = @() }
@@ -113,14 +82,8 @@ function Install-PortableBuildTools {
 }
 
 function Resolve-BuildTools {
-    $cmakeCandidates = @(
-        (Join-Path $portablePythonRoot "bin\cmake.exe"),
-        (Join-Path $portablePythonRoot "cmake\data\bin\cmake.exe")
-    )
-    $ninjaCandidates = @(
-        (Join-Path $portablePythonRoot "bin\ninja.exe"),
-        (Join-Path $portablePythonRoot "ninja.exe")
-    )
+    $cmakeCandidates = @(Get-LocalToolCandidates -BuildToolsRoot $buildToolsRoot -Tool cmake)
+    $ninjaCandidates = @(Get-LocalToolCandidates -BuildToolsRoot $buildToolsRoot -Tool ninja)
 
     $cmake = Resolve-Executable -Name "cmake.exe" -Candidates $cmakeCandidates
     $ninja = Resolve-Executable -Name "ninja.exe" -Candidates $ninjaCandidates
@@ -151,36 +114,6 @@ function Resolve-BuildTools {
     }
 }
 
-function Enter-MsvcEnvironment {
-    if (Resolve-Executable -Name "cl.exe") {
-        return
-    }
-
-    $installationPath = $null
-    $vsWhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
-    if (Test-Path -LiteralPath $vsWhere -PathType Leaf) {
-        $installationPath = (& $vsWhere -latest -products "*" -property installationPath |
-            Select-Object -First 1)
-    }
-    if (!$installationPath -and $env:VSINSTALLDIR) {
-        $installationPath = $env:VSINSTALLDIR.TrimEnd("\")
-    }
-    if (!$installationPath) {
-        throw "Visual Studio 2022 with the Desktop development with C++ workload was not found."
-    }
-
-    $developerShell = Join-Path $installationPath "Common7\Tools\Launch-VsDevShell.ps1"
-    if (!(Test-Path -LiteralPath $developerShell -PathType Leaf)) {
-        throw "Visual Studio Developer PowerShell was not found at $developerShell."
-    }
-
-    Write-Step "Initializing the Visual Studio x64 build environment"
-    & $developerShell -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
-    if (!(Resolve-Executable -Name "cl.exe")) {
-        throw "The Visual Studio environment was loaded, but the x64 C++ compiler is unavailable."
-    }
-}
-
 function Get-CompilerBanner {
     # cl.exe writes its normal version banner to stderr and exits with code 2
     # when invoked without an input file. Windows PowerShell 5.1 converts that
@@ -202,61 +135,9 @@ function Get-CompilerBanner {
     return $banner.Trim()
 }
 
-function Test-QtRoot {
-    param([string]$Candidate)
-
-    if (!$Candidate) {
-        return $false
-    }
-    return (Test-Path -LiteralPath (Join-Path $Candidate "lib\cmake\Qt6\Qt6Config.cmake") -PathType Leaf) `
-        -and (Test-Path -LiteralPath (Join-Path $Candidate "lib\cmake\Qt6Core5Compat\Qt6Core5CompatConfig.cmake") -PathType Leaf) `
-        -and (Test-Path -LiteralPath (Join-Path $Candidate "lib\cmake\Qt6LinguistTools\Qt6LinguistToolsConfig.cmake") -PathType Leaf) `
-        -and (Test-Path -LiteralPath (Join-Path $Candidate "bin\windeployqt.exe") -PathType Leaf)
-}
-
-function Find-QtRoot {
-    param([string]$ExplicitRoot)
-
-    $candidates = [Collections.Generic.List[string]]::new()
-    foreach ($candidate in @(
-        $ExplicitRoot,
-        $env:QTDIR,
-        (Join-Path $portableQtRoot "$QtVersion\$qtArchitecture")
-    )) {
-        if ($candidate) {
-            $candidates.Add($candidate)
-        }
-    }
-
-    if ($env:CMAKE_PREFIX_PATH) {
-        foreach ($candidate in $env:CMAKE_PREFIX_PATH -split ";") {
-            if ($candidate) {
-                $candidates.Add($candidate)
-            }
-        }
-    }
-
-    foreach ($base in @("C:\Qt", "D:\Qt")) {
-        if (Test-Path -LiteralPath $base -PathType Container) {
-            Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue |
-                Sort-Object Name -Descending |
-                ForEach-Object {
-                    $candidates.Add((Join-Path $_.FullName $qtArchitecture))
-                }
-        }
-    }
-
-    foreach ($candidate in $candidates) {
-        if (Test-QtRoot -Candidate $candidate) {
-            return (Resolve-Path -LiteralPath $candidate).Path
-        }
-    }
-    return $null
-}
-
 function Install-PortableQt {
     if ($NoBootstrap) {
-        throw "Qt 6.5+ with Core5Compat and LinguistTools was not found. Install it, pass -QtRoot, or rerun without -NoBootstrap."
+        throw "Qt 6.5+ with Core5Compat, Qml and LinguistTools was not found. Install it, pass -QtRoot, or rerun without -NoBootstrap."
     }
 
     $python = Find-Python
@@ -292,10 +173,11 @@ function Install-PortableQt {
 }
 
 function Resolve-Qt {
-    $resolved = Find-QtRoot -ExplicitRoot $QtRoot
+    $resolved = Find-QtRoot -ExplicitRoot $QtRoot -BuildDirectory (Join-Path $repositoryRoot "build\$Preset") `
+        -BuildToolsRoot $buildToolsRoot -PreferredVersion $QtVersion -RequireLinguistTools
     if (!$resolved) {
         Install-PortableQt
-        $resolved = Find-QtRoot -ExplicitRoot $QtRoot
+        $resolved = Find-QtRoot -BuildToolsRoot $buildToolsRoot -PreferredVersion $QtVersion -RequireLinguistTools
     }
     if (!$resolved) {
         throw "Qt installation completed but a usable Qt root could not be located."
@@ -380,6 +262,55 @@ function Remove-PackageStagingDirectory {
     }
 }
 
+function Install-PortableNsis {
+    if ($NoBootstrap) {
+        throw "NSIS 3.03+ was not found. Pass -NsisRoot or rerun without -NoBootstrap to download a repository-local copy."
+    }
+    # Pinned official release and SHA-256 from the SourceForge download page:
+    # https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download
+    $version = "3.12"
+    $expectedHash = "56581f90db321581c5381193d796fffcf2d24b2f8fed2160a6c6a3baa67f2c4f"
+    $downloads = Join-Path $buildToolsRoot "downloads"
+    $nsisDirectory = Join-Path $buildToolsRoot "nsis"
+    New-Item -ItemType Directory -Force -Path $downloads, $nsisDirectory | Out-Null
+    $archive = Join-Path $downloads "nsis-$version.zip"
+    if (!(Test-Path -LiteralPath $archive -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expectedHash) {
+        Write-Step "Downloading portable NSIS $version"
+        $previousProtocol = [Net.ServicePointManager]::SecurityProtocol
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = $previousProtocol -bor [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -UseBasicParsing -Uri "https://downloads.sourceforge.net/project/nsis/NSIS%203/$version/nsis-$version.zip" `
+                -OutFile $archive
+            # SourceForge can return an HTML download page with a timed redirect
+            # instead of an HTTP redirect. Follow only its HTTPS download hosts.
+            for ($redirect = 0; $redirect -lt 2; $redirect++) {
+                if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -eq $expectedHash) { break }
+                $page = Get-Content -LiteralPath $archive -Raw
+                $match = [regex]::Match($page, 'http-equiv="refresh" content="[0-9]+; url=([^"]+)"')
+                if (!$match.Success) { break }
+                $url = [uri][Net.WebUtility]::HtmlDecode($match.Groups[1].Value)
+                if ($url.Scheme -ne 'https' -or
+                    !($url.Host -eq 'downloads.sourceforge.net' -or $url.Host.EndsWith('.dl.sourceforge.net'))) {
+                    throw "The NSIS download page returned an unexpected redirect. Pass -NsisRoot to use an existing installation."
+                }
+                Invoke-WebRequest -UseBasicParsing -Uri $url.AbsoluteUri -OutFile $archive
+            }
+        } finally {
+            [Net.ServicePointManager]::SecurityProtocol = $previousProtocol
+        }
+    }
+    if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expectedHash) {
+        throw "SHA-256 verification failed for the NSIS download: $archive"
+    }
+    Expand-Archive -LiteralPath $archive -DestinationPath $nsisDirectory -Force
+    $compiler = Join-Path $nsisDirectory "nsis-$version\makensis.exe"
+    if (!(Test-Path -LiteralPath $compiler -PathType Leaf)) {
+        throw "The NSIS archive did not contain makensis.exe: $compiler"
+    }
+    return $compiler
+}
+
 Push-Location $repositoryRoot
 try {
     if ($env:OS -ne "Windows_NT") {
@@ -389,6 +320,7 @@ try {
     if ($Generator -eq "NSIS") {
         $nsisCandidates = @(
             (Join-Path $buildToolsRoot "nsis\makensis.exe"),
+            (Join-Path $buildToolsRoot "nsis\nsis-3.12\makensis.exe"),
             (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"),
             (Join-Path $env:ProgramFiles "NSIS\makensis.exe")
         )
@@ -400,7 +332,7 @@ try {
         }
         $nsis = Resolve-Executable -Name "makensis.exe" -Candidates $nsisCandidates
         if (!$nsis) {
-            throw "NSIS 3.03+ is required for the installer. Install NSIS from https://nsis.sourceforge.io/Download or pass -NsisRoot pointing to its extracted directory."
+            $nsis = Install-PortableNsis
         }
         Add-PathDirectory -Directory (Split-Path -Parent $nsis)
         Write-Host "NSIS: $(& $nsis /VERSION)"
@@ -418,7 +350,8 @@ try {
     Write-Host "Qt: $(& (Join-Path $resolvedQtRoot "bin\qmake.exe") -query QT_VERSION)"
 
     Write-Step "Configuring $Preset"
-    Invoke-Checked -Program $tools.CMake -Arguments @("--preset", $Preset)
+    Invoke-Checked -Program $tools.CMake -Arguments @("--preset", $Preset,
+        "-DCMAKE_PREFIX_PATH=$resolvedQtRoot", "-DQt6_DIR=$resolvedQtRoot/lib/cmake/Qt6")
 
     Write-Step "Building $Preset"
     Invoke-Checked -Program $tools.CMake -Arguments @("--build", "--preset", $Preset)

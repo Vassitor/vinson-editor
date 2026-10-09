@@ -1,0 +1,103 @@
+{
+  "apiVersion": 1,
+  "id": "vinson.text-tools",
+  "name": "Text Tools / 文本工具",
+  "version": "1.1.0",
+  "description": "Configurable text tools: JSON, sorting, deduplication, Markdown, timestamps and reports. 可配置文本工具：JSON、排序、去重、Markdown、时间和报告。",
+  "settings": [
+    {"id": "indent", "label": "JSON indentation / JSON 缩进", "type": "integer", "default": 2, "minimum": 1, "maximum": 8},
+    {"id": "case-sensitive", "label": "Case-sensitive sorting and deduplication / 排序和去重区分大小写", "type": "boolean", "default": true},
+    {"id": "sort-order", "label": "Sort order / 排序方向", "type": "choice", "default": "Ascending / 升序", "choices": ["Ascending / 升序", "Descending / 降序"]},
+    {"id": "timestamp-format", "label": "Timestamp format / 时间格式", "type": "choice", "default": "ISO UTC", "choices": ["ISO UTC", "Local / 本地"]},
+    {"id": "report-title", "label": "Report title / 报告标题", "type": "string", "default": "Text Report / 文本报告", "maxLength": 120}
+  ],
+  "commands": [
+    {
+      "id": "uppercase",
+      "title": "Uppercase Selection / 选区转大写",
+      "shortcut": "Ctrl+Alt+Shift+U",
+      "input": "selection",
+      "output": "replaceSelection",
+      "script": "return context.text.toUpperCase();"
+    },
+    {
+      "id": "format-json",
+      "title": "Format JSON Document / 格式化 JSON 文档",
+      "shortcut": "Ctrl+Alt+Shift+J",
+      "input": "document",
+      "output": "replaceDocument",
+      "script": "return JSON.stringify(JSON.parse(context.text), null, context.settings.indent).replace(/\\n/g, context.lineEnding);"
+    },
+    {
+      "id": "word-count",
+      "title": "Word Count / 统计字数",
+      "input": "document",
+      "output": "message",
+      "script": "var text = context.text.trim(); return 'Words / 单词: ' + (text ? text.split(/\\s+/).length : 0) + ' · Characters / 字符: ' + Array.from(context.text).length;"
+    },
+    {
+      "id": "timestamp",
+      "title": "Insert Timestamp / 插入时间",
+      "input": "none",
+      "output": "insert",
+      "script": "var date = new Date(); return context.settings['timestamp-format'] === 'ISO UTC' ? date.toISOString() : date.toLocaleString();"
+    },
+    {
+      "id": "sort-lines",
+      "title": "Sort Lines / 行排序",
+      "shortcut": "Ctrl+Alt+Shift+S",
+      "input": "selectionOrDocument",
+      "output": "replaceInput",
+      "script": "var lines = context.text.split(/\\r\\n|\\n|\\r/); var suffix = lines.length > 1 && lines[lines.length - 1] === ''; if (suffix) lines.pop(); lines.sort(function(a, b) { if (!context.settings['case-sensitive']) { a = a.toLowerCase(); b = b.toLowerCase(); } return a < b ? -1 : a > b ? 1 : 0; }); if (context.settings['sort-order'] === 'Descending / 降序') lines.reverse(); return lines.join(context.lineEnding) + (suffix ? context.lineEnding : '');"
+    },
+    {
+      "id": "deduplicate-lines",
+      "title": "Remove Duplicate Lines / 行去重",
+      "input": "selectionOrDocument",
+      "output": "replaceInput",
+      "script": "var lines = context.text.split(/\\r\\n|\\n|\\r/); var suffix = lines.length > 1 && lines[lines.length - 1] === ''; if (suffix) lines.pop(); var seen = new Set(); var unique = lines.filter(function(line) { var key = context.settings['case-sensitive'] ? line : line.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; }); return unique.join(context.lineEnding) + (suffix ? context.lineEnding : '');"
+    },
+    {
+      "id": "trim-trailing",
+      "title": "Trim Trailing Whitespace / 清理行尾空格",
+      "input": "selectionOrDocument",
+      "output": "replaceInput",
+      "script": "return context.text.replace(/[ \\t]+(?=\\r\\n|\\n|\\r|$)/g, '');"
+    },
+    {
+      "id": "wrap-selection",
+      "title": "Wrap Selection / 包裹选区",
+      "input": "selection",
+      "output": "replaceSelection",
+      "parameters": [
+        {"id": "before", "label": "Before / 前缀", "type": "string", "default": "**", "maxLength": 200},
+        {"id": "after", "label": "After / 后缀", "type": "string", "default": "**", "maxLength": 200}
+      ],
+      "script": "return context.parameters.before + context.text + context.parameters.after;"
+    },
+    {
+      "id": "number-lines",
+      "title": "Number Lines / 生成编号列表",
+      "input": "selectionOrDocument",
+      "output": "replaceInput",
+      "parameters": [
+        {"id": "start", "label": "Start number / 起始编号", "type": "integer", "default": 1, "minimum": 1, "maximum": 1000000}
+      ],
+      "script": "var lines = context.text.split(/\\r\\n|\\n|\\r/); var suffix = lines.length > 1 && lines[lines.length - 1] === ''; if (suffix) lines.pop(); return lines.map(function(line, index) { return (context.parameters.start + index) + '. ' + line; }).join(context.lineEnding) + (suffix ? context.lineEnding : '');"
+    },
+    {
+      "id": "copy-json-string",
+      "title": "Copy as JSON String / 复制为 JSON 字符串",
+      "input": "selection",
+      "output": "clipboard",
+      "script": "return JSON.stringify(context.text);"
+    },
+    {
+      "id": "report",
+      "title": "Generate Text Report / 生成文本报告",
+      "input": "document",
+      "output": "newDocument",
+      "script": "var text = context.text.trim(); return [context.settings['report-title'], 'File / 文件: ' + (context.fileName || 'Untitled / 未命名'), 'Lines / 行数: ' + context.lineCount, 'Words / 单词: ' + (text ? text.split(/\\s+/).length : 0), 'Characters / 字符: ' + Array.from(context.text).length, 'UTF-8 bytes / 字节: ' + context.documentLength].join(context.lineEnding);"
+    }
+  ]
+}

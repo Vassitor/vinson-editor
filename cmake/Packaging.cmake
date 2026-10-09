@@ -11,6 +11,7 @@ install(FILES
 install(DIRECTORY docs/
     DESTINATION docs
     FILES_MATCHING PATTERN "*.md")
+install(DIRECTORY examples/plugins/ DESTINATION examples/plugins)
 install(FILES THIRD_PARTY_NOTICES.md
     DESTINATION "." COMPONENT third-party-licenses)
 install(DIRECTORY licenses/

@@ -1,0 +1,132 @@
+{
+  "source": "Qt 6.10.2 MSVC x64 SDK sbom/qtdeclarative-6.10.2.spdx.json",
+  "sourceSha256": "683bc92896ce354880985f839df4200b5ee4bdc322028ddb8ae915ebf9fb3cd7",
+  "documentNamespace": "https://qt.io/spdxdocs/qtdeclarative-09c70541+HEAD-host-windows-amd64-target-windows-msvc-amd64-3aaaec0f-6635-54b5-97c7-0827732b04c4",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-qtdeclarative-qt-module-QmlIntegration",
+      "comment": "\nCMake target name: QmlIntegration\nCMake exported target name: Qt6::QmlIntegration\nContained in CMake package: Qt6QmlIntegration\n",
+      "copyrightText": "Copyright (C) The Qt Company Ltd. and other contributors.",
+      "downloadLocation": "git://code.qt.io/qt/qtdeclarative.git@09c70541c76659bcd8c49f05841b0e778c9ffd4c",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE_MANAGER",
+          "referenceLocator": "pkg:github/qt/qtdeclarative@09c70541?library_name=QmlIntegration#src/qmlintegration",
+          "referenceType": "purl"
+        },
+        {
+          "referenceCategory": "PACKAGE_MANAGER",
+          "referenceLocator": "pkg:generic/TheQtCompany/qtdeclarative-QmlIntegration@09c70541?vcs_url=https://code.qt.io/qt/qtdeclarative.git@09c70541&library_name=QmlIntegration#src/qmlintegration",
+          "referenceType": "purl"
+        },
+        {
+          "referenceCategory": "SECURITY",
+          "referenceLocator": "cpe:2.3:a:qt:qt:6.10.2:*:*:*:*:*:*:*",
+          "referenceType": "cpe23Type"
+        },
+        {
+          "referenceCategory": "SECURITY",
+          "referenceLocator": "cpe:2.3:a:qt:qtdeclarative:6.10.2:*:*:*:*:*:*:*",
+          "referenceType": "cpe23Type"
+        }
+      ],
+      "filesAnalyzed": false,
+      "licenseConcluded": "LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "licenseDeclared": "LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "name": "QmlIntegration",
+      "primaryPackagePurpose": "LIBRARY",
+      "supplier": "Organization: TheQtCompany",
+      "versionInfo": "6.10.2"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-qtdeclarative-qt-3rdparty-sources-Qml-Attribution-masm",
+      "comment": "\nCMake target name: Qml_Attribution_masm\n    Information extracted from:\n     /src_dir/qtdeclarative/src/3rdparty/masm/qt_attribution.json\n    Entry index: 0\n    Id: masm\n    Name: JavaScriptCore Macro Assembler\n    Qt usage: Used in Qt QML.\n    License: BSD 2-clause \"Simplified\" License\n    License file: LICENSE\n",
+      "copyrightText": "Copyright (C) 2003-2018 Apple Inc. All rights reserved.\nCopyright (C) 2007 Justin Haygood (jhaygood@reaktix.com)\nCopyright (C) 2007-2009 Torch Mobile, Inc. All rights reserved. (http://www.torchmobile.com/)\nCopyright (C) 2009, 2010 University of Szeged\nCopyright (C) 2009-2011 STMicroelectronics. All rights reserved.\nCopyright (C) 2010 MIPS Technologies, Inc. All rights reserved.\nCopyright (C) 2010 Peter Varga (pvarga@inf.u-szeged.hu), University of Szeged\nCopyright (C) 2010 MIPS Technologies, Inc. All rights reserved.\nCopyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.\nCopyright (C) 2011 Google Inc. All rights reserved.\nCopyright (C) 2013 Samsung Electronics. All rights reserved.\nCopyright (C) 2015 Cisco Systems, Inc. All rights reserved.\nCopyright (c) 2002-2009 Vivek Thampi",
+      "downloadLocation": "https://trac.webkit.org/wiki/JavaScriptCore",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE_MANAGER",
+          "referenceLocator": "pkg:github/qt/qtdeclarative@09c70541?library_name=Qml_Attribution_masm#src/qml",
+          "referenceType": "purl"
+        },
+        {
+          "referenceCategory": "PACKAGE_MANAGER",
+          "referenceLocator": "pkg:generic/TheQtCompany/qtdeclarative-Qml_Attribution_masm@09c70541?vcs_url=https://code.qt.io/qt/qtdeclarative.git@09c70541&library_name=Qml_Attribution_masm#src/qml",
+          "referenceType": "purl"
+        }
+      ],
+      "filesAnalyzed": false,
+      "licenseConcluded": "BSD-2-Clause",
+      "licenseDeclared": "NOASSERTION",
+      "name": "Qml_Attribution_masm",
+      "primaryPackagePurpose": "LIBRARY",
+      "supplier": "Organization: TheQtCompany",
+      "versionInfo": "unknown"
+    },
+    {
+      "SPDXID": "SPDXRef-Package-qtdeclarative-qt-module-Qml",
+      "comment": "\nCMake target name: Qml\nCMake exported target name: Qt6::Qml\nContained in CMake package: Qt6Qml\n",
+      "copyrightText": "Copyright (C) The Qt Company Ltd. and other contributors.",
+      "downloadLocation": "git://code.qt.io/qt/qtdeclarative.git@09c70541c76659bcd8c49f05841b0e778c9ffd4c",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE_MANAGER",
+          "referenceLocator": "pkg:github/qt/qtdeclarative@09c70541?library_name=Qml#src/qml",
+          "referenceType": "purl"
+        },
+        {
+          "referenceCategory": "PACKAGE_MANAGER",
+          "referenceLocator": "pkg:generic/TheQtCompany/qtdeclarative-Qml@09c70541?vcs_url=https://code.qt.io/qt/qtdeclarative.git@09c70541&library_name=Qml#src/qml",
+          "referenceType": "purl"
+        },
+        {
+          "referenceCategory": "SECURITY",
+          "referenceLocator": "cpe:2.3:a:qt:qt:6.10.2:*:*:*:*:*:*:*",
+          "referenceType": "cpe23Type"
+        },
+        {
+          "referenceCategory": "SECURITY",
+          "referenceLocator": "cpe:2.3:a:qt:qtdeclarative:6.10.2:*:*:*:*:*:*:*",
+          "referenceType": "cpe23Type"
+        }
+      ],
+      "filesAnalyzed": true,
+      "licenseConcluded": "LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "licenseDeclared": "LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only",
+      "name": "Qml",
+      "packageVerificationCode": {
+        "packageVerificationCodeValue": "29f08fa642a2edc6bcc9273fd01808226e60dd4d"
+      },
+      "primaryPackagePurpose": "LIBRARY",
+      "supplier": "Organization: TheQtCompany",
+      "versionInfo": "6.10.2"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-Package-qtdeclarative-qt-module-Qml",
+      "relatedSpdxElement": "DocumentRef-qtbase:SPDXRef-Package-qtbase-qt-module-Core",
+      "relationshipType": "DEPENDS_ON"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-qtdeclarative-qt-module-Qml",
+      "relatedSpdxElement": "DocumentRef-qtbase:SPDXRef-Package-qtbase-qt-module-PlatformModuleInternal",
+      "relationshipType": "DEPENDS_ON"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-qtdeclarative-qt-module-Qml",
+      "relatedSpdxElement": "DocumentRef-qtbase:SPDXRef-Package-qtbase-qt-module-Network",
+      "relationshipType": "DEPENDS_ON"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-qtdeclarative-qt-module-Qml",
+      "relatedSpdxElement": "SPDXRef-Package-qtdeclarative-qt-module-QmlIntegration",
+      "relationshipType": "DEPENDS_ON"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-qtdeclarative-qt-module-Qml",
+      "relatedSpdxElement": "SPDXRef-Package-qtdeclarative-qt-3rdparty-sources-Qml-Attribution-masm",
+      "relationshipType": "DEPENDS_ON"
+    }
+  ]
+}

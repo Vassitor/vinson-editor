@@ -9,7 +9,7 @@ used for continuous development and portability checks. The CMake project
 rejects 32-bit configurations.
 
 Minimum development requirements are CMake 3.25, Ninja, a C++20 compiler, and
-Qt 6.5 with Core, Gui, Widgets, Test, and Core5Compat. Qt Linguist Tools is
+Qt 6.5 with Core, Gui, Widgets, Test, Core5Compat, and Qml. Qt Linguist Tools is
 optional; when installed, it compiles bundled translations and enables the
 localization test. Recorded benchmark environments and measurements are listed
 in [PERFORMANCE.md](PERFORMANCE.md).
@@ -18,7 +18,7 @@ Ubuntu setup:
 
 ```bash
 sudo apt update
-sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev
+sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev qt6-declarative-dev
 ```
 
 To compile translations, also install:
@@ -70,6 +70,7 @@ When upgrading Scintilla:
 - `src/search`: search/replace orchestration
 - `src/session`: recent/closed-document history and recovery snapshots
 - `src/settings`: appearance themes and validated `QSettings` persistence
+- `src/plugins`: plugin validation, installation, state and bounded script execution
 - `src/ui`: focused dialogs and reusable UI pieces
 - `tests`: Qt Test sources, shared CTest registration, and test runtime deployment
 - `benchmarks`: manual large-file performance harness and its CMake target

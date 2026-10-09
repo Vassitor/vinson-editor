@@ -24,6 +24,14 @@ target_include_directories(vinson_core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(vinson_core PUBLIC Qt6::Core)
 
 add_library(vinson_editor_ui STATIC
+    plugins/PluginManager.cpp
+    plugins/PluginManager.h
+    plugins/PluginSafety.cpp
+    plugins/PluginSafety.h
+    ui/PluginDialog.cpp
+    ui/PluginDialog.h
+    ui/PluginOptionsDialog.cpp
+    ui/PluginOptionsDialog.h
     editor/EditorWidget.cpp
     editor/EditorWidget.h
     search/SearchController.cpp
@@ -61,7 +69,18 @@ add_library(vinson_editor_ui STATIC
 )
 target_include_directories(vinson_editor_ui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(vinson_editor_ui
-    PUBLIC vinson_core Qt6::Widgets Scintilla::Scintilla)
+    PUBLIC vinson_core Qt6::Widgets Qt6::Qml Scintilla::Scintilla)
+
+qt_add_resources(vinson_editor_ui vinson_plugin_examples
+    PREFIX "/plugins"
+    BASE "${PROJECT_SOURCE_DIR}/examples/plugins"
+    FILES "${PROJECT_SOURCE_DIR}/examples/plugins/text-tools.vinson-plugin")
+
+qt_add_resources(vinson_editor_ui vinson_plugin_docs
+    PREFIX "/plugin-docs"
+    BASE "${PROJECT_SOURCE_DIR}/docs"
+    FILES "${PROJECT_SOURCE_DIR}/docs/PLUGINS.md"
+          "${PROJECT_SOURCE_DIR}/docs/PLUGINS.zh-CN.md")
 
 qt_add_resources(vinson_editor_ui vinson_settings_icons
     PREFIX "/settings"

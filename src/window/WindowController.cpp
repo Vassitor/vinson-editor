@@ -10,6 +10,7 @@
 #include <QMainWindow>
 #include <QMenuBar>
 #include <QMouseEvent>
+#include <QScopedValueRollback>
 #include <QStatusBar>
 #include <QTimer>
 #include <QWindow>
@@ -21,6 +22,7 @@ namespace vinson {
 namespace {
 
 constexpr int resizeBorderWidth = 6;
+constexpr int framedMinimumWidth = 250;
 
 Qt::CursorShape cursorForEdges(Qt::Edges edges)
 {
@@ -52,6 +54,10 @@ WindowController::WindowController(QMainWindow* window, QObject* parent)
           && window->windowFlags().testFlag(Qt::WindowStaysOnTopHint))
 {
     Q_ASSERT(window_ != nullptr);
+    if (!frameless_) {
+        window_->setMinimumWidth(std::max(
+            framedMinimumWidth, window_->minimumWidth()));
+    }
     window_->setMouseTracking(true);
     qApp->installEventFilter(this);
 }
@@ -111,6 +117,15 @@ void WindowController::setFrameless(bool enabled)
         return;
     }
 
+    // Capture the actual editable viewport before hiding any chrome. Keeping
+    // the full framed client height would turn the removed bars into extra
+    // editor space. Reverse transitions also preserve this height so repeated
+    // toggles do not gradually shrink the document viewport.
+    const int editorHeight = editor_ != nullptr && window_->isVisible()
+        && window_->windowState() == Qt::WindowNoState
+        && !minimalMode_ && !minimalModeTransition_
+        ? editor_->viewport()->height() : -1;
+
     bool restoreChrome = false;
     bool menuBarVisible = false;
     bool statusBarVisible = false;
@@ -124,6 +139,7 @@ void WindowController::setFrameless(bool enabled)
         };
         window_->menuBar()->hide();
         window_->statusBar()->hide();
+        window_->setMinimumWidth(0);
     } else if (!minimalMode_ && framelessUiState_.valid) {
         restoreChrome = true;
         menuBarVisible = framelessUiState_.menuBarVisible;
@@ -161,7 +177,7 @@ void WindowController::setFrameless(bool enabled)
         // recreated. Reapply the captured chrome state after that pass so the
         // status bar cannot remain collapsed at the bottom of the window.
         QTimer::singleShot(0, this,
-            [this, menuBarVisible, statusBarVisible] {
+            [this, menuBarVisible, statusBarVisible, editorHeight] {
                 if (frameless_ || minimalMode_) {
                     return;
                 }
@@ -195,9 +211,12 @@ void WindowController::setFrameless(bool enabled)
                     const QSize framedSize = window_->size();
                     window_->resize(framedSize.width(),
                                     framedSize.height() + 1);
-                    QTimer::singleShot(0, this, [this, framedSize] {
+                    QTimer::singleShot(0, this, [this, framedSize, editorHeight] {
                         if (!frameless_ && !minimalMode_) {
                             window_->resize(framedSize);
+                            if (editorHeight > 0) {
+                                resizeForEditorHeight(editorHeight);
+                            }
                         }
                     });
                 }
@@ -205,6 +224,11 @@ void WindowController::setFrameless(bool enabled)
     }
     emit framelessChanged(enabled);
     refreshMinimumSize();
+    if (editorHeight > 0) {
+        // Signal handlers remove the custom title-bar margin and tab strip.
+        // Resize only after those changes have reached the window layout.
+        resizeForEditorHeight(editorHeight);
+    }
 }
 
 void WindowController::toggleFrameless()
@@ -232,6 +256,7 @@ void WindowController::setMinimalMode(bool enabled)
     if (minimalMode_ == enabled || editor_ == nullptr) {
         return;
     }
+    const QScopedValueRollback<bool> transition(minimalModeTransition_, true);
 
     if (enabled) {
         minimalUiState_ = {
@@ -283,7 +308,12 @@ void WindowController::toggleMinimalMode()
 
 void WindowController::refreshMinimumSize()
 {
-    if (!frameless_ || editor_ == nullptr) {
+    if (!frameless_) {
+        window_->setMinimumWidth(std::max(
+            framedMinimumWidth, window_->minimumWidth()));
+        return;
+    }
+    if (editor_ == nullptr) {
         return;
     }
     const QFontMetricsF metrics(editor_->editorFont());
@@ -425,6 +455,23 @@ void WindowController::applyWindowFlag(Qt::WindowType flag, bool enabled)
         focusedWidget->setFocus(Qt::OtherFocusReason);
     }
     refreshEditorScrollBars();
+}
+
+void WindowController::resizeForEditorHeight(int height)
+{
+    if (editor_ == nullptr || !window_->isVisible()
+        || window_->windowState() != Qt::WindowNoState
+        || minimalMode_ || minimalModeTransition_) {
+        return;
+    }
+    if (window_->layout() != nullptr) {
+        window_->layout()->invalidate();
+        window_->layout()->activate();
+    }
+    // Visible panels and horizontal scroll bars still need their own space.
+    // Adjust only the height occupied by the editor's visible text viewport.
+    window_->resize(window_->width(),
+                    window_->height() + height - editor_->viewport()->height());
 }
 
 void WindowController::refreshEditorScrollBars()

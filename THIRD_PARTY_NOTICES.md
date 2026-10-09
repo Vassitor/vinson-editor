@@ -8,6 +8,7 @@ Vinson Editor 的项目代码采用 [MIT License](LICENSE)。第三方组件保�
 | --- | --- | --- | --- |
 | Scintilla | 5.6.6 | 静态编译的文本编辑控件 | [上游许可证全文](licenses/Scintilla.txt) |
 | Qt | 本次清单为 6.8.3 | 动态链接 Core、Gui、Widgets、Core5Compat；部署工具还可能携带 Network、Svg 及平台、样式、图像插件、翻译 | [组件版权清单](licenses/qt/NOTICES.md)、[LGPL v3](licenses/texts/LGPL-3.0-only.txt)、[GPL v3](licenses/texts/GPL-3.0-only.txt) |
+| Qt Qml | 插件引擎补充清单为 6.10.2 | 动态链接 Qml（QJSEngine），依赖 Network 和 QmlIntegration；包含 JavaScriptCore 汇编组件 | [插件引擎声明](licenses/qt/QML-NOTICES.md)、[LGPL v3](licenses/texts/LGPL-3.0-only.txt)、[BSD 2-Clause](licenses/texts/BSD-2-Clause.txt) |
 
 Scintilla 的来源版本及归档校验值见 [third_party/README.md](third_party/README.md)（源码仓库中）。
 
@@ -16,6 +17,10 @@ Qt 的不同文件与内含组件可能采用不同许可条件。完整的上�
 ## Qt 清单的范围
 
 本次从 Qt 6.8.3 Windows MSVC x64 SDK 的 `qtbase`、`qt5compat`、`qtsvg`、`qttranslations` SBOM 生成声明。为保留模块内的上游声明，包含了这些模块的完整清单，因此也包含未随本应用发布的平台代码、构建工具和测试组件。该清单不是应用二进制的精确依赖图。
+
+插件引擎的新增 Qml 依赖另外保留本地 Qt 6.10.2 SDK 中相关包的原始记录及来源校验值；
+见 [QML-NOTICES.md](licenses/qt/QML-NOTICES.md)。重新生成脚本已纳入 `qtdeclarative` 模块，
+发布时应使用实际 Qt SDK 版本刷新完整清单。
 
 Qt SDK 的原始 SPDX 文档和自定义许可证全文均保留原文。标准许可证文本来自固定版本的 SPDX License List；来源及 SHA-256 见 [licenses/SOURCES.md](licenses/SOURCES.md)。`NOASSERTION` 表示上游未作断言，不代表无版权或无许可要求。
 

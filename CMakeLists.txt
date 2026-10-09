@@ -37,7 +37,7 @@ if(UNIX AND NOT APPLE)
 endif()
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-    Core Core5Compat Gui Widgets)
+    Core Core5Compat Gui Widgets Qml)
 find_package(Qt6 6.5 QUIET COMPONENTS LinguistTools)
 
 include(cmake/Scintilla.cmake)

@@ -3,6 +3,7 @@
 #include "editor/EditorWidget.h"
 #include "file/FileManager.h"
 #include "file/FileTypes.h"
+#include "plugins/PluginManager.h"
 #include "search/SearchController.h"
 #include "settings/SettingsManager.h"
 #include "settings/ThemeManager.h"
@@ -10,6 +11,8 @@
 #include "ui/EditHistoryWidget.h"
 #include "ui/MenuAppearance.h"
 #include "ui/SettingsDialog.h"
+#include "ui/PluginDialog.h"
+#include "ui/PluginOptionsDialog.h"
 #include "window/WindowController.h"
 #include "window/NativeTitleBar.h"
 #include "window/NativeWindowAppearance.h"
@@ -54,6 +57,7 @@
 #include <QWheelEvent>
 #include <QPushButton>
 #include <QStatusBar>
+#include <QStandardPaths>
 #include <QSignalBlocker>
 #include <QScreen>
 #include <QStringList>
@@ -510,7 +514,8 @@ protected:
 
 } // namespace
 
-MainWindow::MainWindow(QWidget* parent, bool restorePersistentState)
+MainWindow::MainWindow(QWidget* parent, bool restorePersistentState,
+                       const QString& pluginDirectory)
     : QMainWindow(parent)
     , editor_(new EditorWidget(this))
     , tabBar_(new DocumentTabBar(this))
@@ -532,6 +537,62 @@ MainWindow::MainWindow(QWidget* parent, bool restorePersistentState)
     menuBar()->setContextMenuPolicy(Qt::PreventContextMenu);
     themeManager_ = new ThemeManager(editor_, this, this);
     settingsManager_ = new SettingsManager(this);
+    pluginManager_ = new PluginManager(pluginDirectory.isEmpty()
+        ? QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation))
+            .filePath(QStringLiteral("plugins")) : pluginDirectory, this);
+    connect(pluginManager_, &PluginManager::pluginsChanged,
+            this, &MainWindow::rebuildPluginMenu);
+    connect(pluginManager_, &PluginManager::runningChanged, this, [this](bool running) {
+        updateBusyUi();
+        if (!running) {
+            QTimer::singleShot(0, this, [this] {
+                processPendingOpenFiles();
+                processCurrentExternalFileChange();
+            });
+        }
+    });
+    connect(pluginManager_, &PluginManager::commandFinished, this,
+            [this](const QString& output, const QString& text, const QString& error) {
+        if (!error.isEmpty()) {
+            statusBar()->showMessage(error, 7000);
+            return;
+        }
+        if (currentTab().documentHandle != pluginDocumentHandle_
+            || documentRevision_ != pluginDocumentRevision_) {
+            statusBar()->showMessage(tr("Document changed; plugin result was discarded."), 5000);
+            return;
+        }
+        if (output == QLatin1String("message")) {
+            QMessageBox result(this);
+            result.setWindowTitle(tr("Plugin Result"));
+            result.setTextFormat(Qt::PlainText);
+            result.setText(text.left(16000));
+            result.exec();
+        } else if (output == QLatin1String("clipboard")) {
+            qApp->clipboard()->setText(text);
+            statusBar()->showMessage(tr("Plugin result copied to clipboard."), 3000);
+        } else if (output == QLatin1String("newDocument")) {
+            if (addBlankTab() < 0) return;
+            editor_->beginUndoAction();
+            editor_->replaceSelectionUtf8(text.toUtf8());
+            editor_->endUndoAction();
+            statusBar()->showMessage(tr("Plugin result opened in a new tab."), 3000);
+        } else {
+            const bool wholeDocument = output == QLatin1String("replaceDocument");
+            const qint64 start = wholeDocument ? 0 : pluginSelectionStart_;
+            const qint64 end = wholeDocument ? editor_->documentLength()
+                : output == QLatin1String("insert") ? start : pluginSelectionEnd_;
+            const QByteArray replacement = text.toUtf8();
+            if (editor_->textRangeUtf8(start, end - start) != replacement) {
+                editor_->beginUndoAction();
+                editor_->setSel(static_cast<sptr_t>(start), static_cast<sptr_t>(end));
+                editor_->replaceSelectionUtf8(replacement);
+                editor_->endUndoAction();
+            }
+            statusBar()->showMessage(tr("Plugin command completed."), 3000);
+            editor_->QWidget::setFocus();
+        }
+    });
     recoveryManager_ = new RecoveryManager(
         QDir(QFileInfo(settingsManager_->fileName()).absolutePath())
             .filePath(QStringLiteral("recovery")),
@@ -687,6 +748,7 @@ MainWindow::MainWindow(QWidget* parent, bool restorePersistentState)
                 }
             });
     connect(editor_, &EditorWidget::editHistoryChanged, this, [this] {
+        ++documentRevision_;
         if (!switchingTabs_ && currentTab().document.isModified()) {
             scheduleRecoverySnapshot();
         }
@@ -701,6 +763,8 @@ MainWindow::MainWindow(QWidget* parent, bool restorePersistentState)
             this, [this] {
                 if (searchController_->isSearching()) {
                     searchController_->cancelSearch();
+                } else if (pluginManager_->isRunning()) {
+                    pluginManager_->cancel();
                 } else {
                     fileManager_->cancelCurrentOperation();
                 }
@@ -720,6 +784,7 @@ MainWindow::MainWindow(QWidget* parent, bool restorePersistentState)
     if (persistentStateEnabled_) {
         QTimer::singleShot(0, this, &MainWindow::initializeCrashRecovery);
     }
+    refreshPluginShortcuts();
 }
 
 MainWindow::~MainWindow()
@@ -800,6 +865,7 @@ void MainWindow::handleBossKeyRegistrationFailure(
     const QKeySequence& activeShortcut, const QString& message)
 {
     bossKey_ = activeShortcut;
+    refreshPluginShortcuts();
     savePersistentSettings();
     statusBar()->showMessage(message, 6000);
 }
@@ -808,6 +874,7 @@ void MainWindow::handleFocusShortcutRegistrationFailure(
     const QKeySequence& activeShortcut, const QString& message)
 {
     focusShortcut_ = activeShortcut;
+    refreshPluginShortcuts();
     savePersistentSettings();
     statusBar()->showMessage(message, 6000);
 }
@@ -1205,12 +1272,155 @@ void MainWindow::createMenus()
     connect(decreaseBackgroundAlphaAction_, &QAction::triggered,
             this, [this] { adjustBackgroundAlpha(-5); });
 
-    // Include submenus and QMenuBar's overflow popup as well as the five
+    pluginsMenu_ = menuBar()->addMenu(tr("&Plugins"));
+    pluginsMenu_->setObjectName(QStringLiteral("pluginsMenu"));
+    rebuildPluginMenu();
+
+    // Include submenus and QMenuBar's overflow popup as well as the six
     // top-level menus, sharing one appearance with the tray menu.
     menuBar()->ensurePolished();
     for (QMenu* menu : menuBar()->findChildren<QMenu*>()) {
         applyMenuAppearance(menu);
     }
+}
+
+void MainWindow::rebuildPluginMenu()
+{
+    if (!pluginsMenu_) return;
+    for (auto* action : pluginActions_) {
+        removeAction(action);
+        delete action;
+    }
+    pluginActions_.clear();
+    // QMenu::clear does not delete submenu widgets.
+    for (auto* menu : pluginsMenu_->findChildren<QMenu*>(QString(), Qt::FindDirectChildrenOnly))
+        delete menu;
+    pluginsMenu_->clear();
+    auto* manage = pluginsMenu_->addAction(tr("Manage Plugins…"));
+    manage->setObjectName(QStringLiteral("managePluginsAction"));
+    connect(manage, &QAction::triggered, this, [this] {
+        PluginDialog dialog(pluginManager_, this);
+        dialog.exec();
+    });
+    pluginsMenu_->addSeparator();
+    for (const auto& plugin : pluginManager_->plugins()) {
+        if (!plugin.enabled) continue;
+        auto* menu = pluginsMenu_->addMenu(plugin.name);
+        applyMenuAppearance(menu);
+        for (const auto& command : plugin.commands) {
+            auto* action = new QAction(command.title, this);
+            action->setObjectName(QStringLiteral("plugin.%1.%2").arg(plugin.id, command.id));
+            action->setProperty("pluginCommand", true);
+            action->setProperty("pluginShortcut", QVariant::fromValue(command.shortcut));
+            action->setShortcutContext(Qt::WindowShortcut);
+            action->setEnabled(!isDocumentBusy());
+            menu->addAction(action);
+            pluginActions_.append(action);
+            addAction(action);
+            connect(action, &QAction::triggered, this, [this, id = plugin.id, command] {
+                runPluginCommand(id, command);
+            });
+        }
+    }
+    if (pluginActions_.isEmpty()) {
+        auto* empty = pluginsMenu_->addAction(tr("No enabled plugins"));
+        empty->setEnabled(false);
+    }
+    refreshPluginShortcuts();
+}
+
+void MainWindow::refreshPluginShortcuts()
+{
+    QList<QKeySequence> occupied{QKeySequence(Qt::Key_Escape), bossKey_, focusShortcut_};
+    for (const auto* action : findChildren<QAction*>()) {
+        if (!action->property("pluginCommand").toBool()) occupied.append(action->shortcuts());
+    }
+    pluginManager_->setReservedShortcuts(occupied);
+    for (auto* action : pluginActions_) {
+        const auto shortcut = action->property("pluginShortcut").value<QKeySequence>();
+        bool conflict = false;
+        for (const auto& other : occupied) {
+            if (PluginManager::shortcutsConflict(shortcut, other)) { conflict = true; break; }
+        }
+        action->setShortcut(conflict ? QKeySequence() : shortcut);
+        action->setToolTip(conflict
+            ? tr("Shortcut %1 is already in use. Change it in plugin settings.")
+                .arg(shortcut.toString(QKeySequence::NativeText)) : QString());
+        if (!conflict) occupied.append(shortcut);
+    }
+}
+
+void MainWindow::runPluginCommand(const QString& pluginId, const PluginCommand& command)
+{
+    if (isDocumentBusy()) return;
+    if ((command.input == QLatin1String("selection")
+         || command.output == QLatin1String("replaceSelection"))
+        && editor_->selectionStartPosition() == editor_->selectionEndPosition()) {
+        statusBar()->showMessage(tr("Select text before running this plugin command."), 4000);
+        return;
+    }
+    QVariantMap parameters;
+    if (!command.parameters.isEmpty()) {
+        const auto document = currentTab().documentHandle;
+        const auto revision = documentRevision_;
+        const auto caret = editor_->currentPos();
+        const auto anchor = editor_->anchor();
+        PluginParametersDialog dialog(command, this);
+        if (dialog.exec() != QDialog::Accepted || isDocumentBusy()) return;
+        if (currentTab().documentHandle != document || documentRevision_ != revision
+            || editor_->currentPos() != caret || editor_->anchor() != anchor) {
+            statusBar()->showMessage(tr("Document changed; plugin result was discarded."), 5000);
+            return;
+        }
+        parameters = dialog.values();
+    }
+    QString scope = command.input;
+    const bool hasSelection = editor_->selectionStartPosition() != editor_->selectionEndPosition();
+    if (scope == QLatin1String("selectionOrDocument"))
+        scope = hasSelection ? QStringLiteral("selection") : QStringLiteral("document");
+    qint64 inputStart = 0;
+    qint64 inputEnd = 0;
+    if (scope == QLatin1String("document")) inputEnd = editor_->documentLength();
+    else if (scope == QLatin1String("selection")) {
+        inputStart = editor_->selectionStartPosition();
+        inputEnd = editor_->selectionEndPosition();
+    } else if (scope == QLatin1String("line")) {
+        const auto line = editor_->lineFromPosition(editor_->currentPos());
+        inputStart = editor_->positionFromLine(line);
+        inputEnd = editor_->lineEndPosition(line);
+    }
+    const qint64 inputBytes = inputEnd - inputStart;
+    if (inputBytes > PluginManager::maximumTextBytes
+        || (command.output == QLatin1String("replaceDocument")
+            && editor_->documentLength() > PluginManager::maximumTextBytes)) {
+        statusBar()->showMessage(tr("Plugin text operations are limited to 8 MiB. Select a smaller range."), 5000);
+        return;
+    }
+    const auto text = editor_->textRangeUtf8(inputStart, inputBytes);
+    pluginDocumentHandle_ = currentTab().documentHandle;
+    pluginDocumentRevision_ = documentRevision_;
+    pluginSelectionStart_ = command.output == QLatin1String("replaceInput") ? inputStart
+        : command.output == QLatin1String("insert") ? editor_->currentPosition() : editor_->selectionStartPosition();
+    pluginSelectionEnd_ = command.output == QLatin1String("replaceInput") ? inputEnd : editor_->selectionEndPosition();
+    const auto ending = static_cast<Scintilla::EndOfLine>(editor_->eOLMode());
+    const QVariantMap context{
+        {QStringLiteral("text"), QString::fromUtf8(text)},
+        {QStringLiteral("fileName"), currentTab().document.path()},
+        {QStringLiteral("line"), editor_->currentOneBasedLine()},
+        {QStringLiteral("column"), editor_->column(editor_->currentPos()) + 1},
+        {QStringLiteral("position"), editor_->currentPosition()},
+        {QStringLiteral("selectionStart"), editor_->selectionStartPosition()},
+        {QStringLiteral("selectionEnd"), editor_->selectionEndPosition()},
+        {QStringLiteral("documentLength"), editor_->documentLength()},
+        {QStringLiteral("lineCount"), editor_->editorLineCount()},
+        {QStringLiteral("inputScope"), scope},
+        {QStringLiteral("parameters"), parameters},
+        {QStringLiteral("lineEnding"), ending == Scintilla::EndOfLine::CrLf ? QStringLiteral("\r\n")
+            : ending == Scintilla::EndOfLine::Cr ? QStringLiteral("\r") : QStringLiteral("\n")}};
+    QString error;
+    statusBar()->showMessage(tr("Running plugin: %1…").arg(command.title));
+    if (!pluginManager_->execute(pluginId, command.id, context, &error))
+        statusBar()->showMessage(error, 5000);
 }
 
 void MainWindow::connectSearch()
@@ -1402,6 +1612,7 @@ void MainWindow::rebuildAppearancePresetActions()
                 [this, index] { applyAppearancePreset(static_cast<int>(index)); });
         appearancePresetActions_.append(action);
     }
+    refreshPluginShortcuts();
 }
 
 void MainWindow::applyAppearancePreset(int index)
@@ -1444,6 +1655,7 @@ void MainWindow::applyShortcuts(
             action->setShortcut(iterator.value());
         }
     }
+    refreshPluginShortcuts();
 }
 
 QMap<QString, QKeySequence> MainWindow::shortcuts() const
@@ -2848,12 +3060,13 @@ void MainWindow::ensureWindowOnScreen()
 
 bool MainWindow::isDocumentBusy() const
 {
-    return fileManager_->isBusy() || searchController_->isSearching();
+    return fileManager_->isBusy() || searchController_->isSearching()
+        || pluginManager_->isRunning();
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 {
-    if (searchController_->isSearching()
+    if ((searchController_->isSearching() || pluginManager_->isRunning())
         && (event->type() == QEvent::ShortcutOverride
             || event->type() == QEvent::KeyPress)) {
         const auto* widget = qobject_cast<QWidget*>(watched);
@@ -2861,7 +3074,8 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         if (widget && widget->window() == this && key->key() == Qt::Key_Escape) {
             event->accept();
             if (event->type() == QEvent::KeyPress) {
-                searchController_->cancelSearch();
+                if (pluginManager_->isRunning()) pluginManager_->cancel();
+                else searchController_->cancelSearch();
             }
             return true;
         }
@@ -2873,6 +3087,8 @@ void MainWindow::updateBusyUi()
 {
     const bool busy = isDocumentBusy();
     const bool searching = searchController_->isSearching();
+    const bool pluginRunning = pluginManager_->isRunning();
+    for (auto* action : pluginActions_) action->setEnabled(!busy);
     newAction_->setEnabled(!busy);
     openAction_->setEnabled(!busy);
     recentFilesMenu_->setEnabled(
@@ -2892,7 +3108,7 @@ void MainWindow::updateBusyUi()
     for (QAction* action : bookmarkActions_) {
         action->setEnabled(!busy);
     }
-    findReplaceWidget_->setEnabled(!fileManager_->isBusy());
+    findReplaceWidget_->setEnabled(!fileManager_->isBusy() && !pluginRunning);
     tabBar_->setEnabled(!busy);
     editHistoryWidget_->setEnabled(!busy);
     for (QAction* action : findChildren<QAction*>()) {
@@ -2905,7 +3121,7 @@ void MainWindow::updateBusyUi()
     }
     progressBar_->setVisible(busy);
     cancelOperationButton_->setVisible(busy);
-    if (searching || fileManager_->operation() == FileManager::Operation::Saving) {
+    if (searching || pluginRunning || fileManager_->operation() == FileManager::Operation::Saving) {
         editor_->setEnabled(false);
         progressBar_->setRange(0, searching ? 100 : 0);
     } else if (!busy && !loadReplacedDocument_) {

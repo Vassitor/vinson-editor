@@ -12,6 +12,12 @@
 
 脚本会自动初始化 Visual Studio x64 编译环境，查找 CMake、Ninja 和兼容的 Qt，配置并构建 Release、运行全部测试、调用 CPack，并验证生成的 SHA-256 校验和。如果缺少 CMake、Ninja 或 Qt，脚本会借助 Python 3.9+ 将仓库专用副本安装到 `.build-tools/`，不会修改系统级安装。可通过 `-QtRoot` 指定 Qt 目录；在离线且工具已准备好的环境中可使用 `-NoBootstrap`。
 
+工具查找同时支持 `.build-tools/python` 和旧版 `.build-tools/python-packages` 目录。Qt 优先使用 `-QtRoot`，其次是构建目录 CMake 缓存记录的 SDK、环境变量指定的路径，以及 `.build-tools/Qt`、`C:\Qt`、`D:\Qt` 下已安装的 MSVC x64 SDK，无需安装默认的引导下载版本。
+
+运行 `.\scripts\deploy-and-run-windows.ps1` 可构建、部署并启动本地 Release 程序。使用 `-DeployOnly` 只部署而不启动；使用 `-SkipBuild` 复用已有可执行文件。
+
+运行 `.\scripts\package-installer-windows.ps1` 可生成安装包。缺少 NSIS 时，脚本会下载固定版本的 NSIS 3.12 便携包到 `.build-tools/nsis`，验证 SHA-256 后再解压。可用 `-NsisRoot` 指定已安装的 NSIS；`-NoBootstrap` 禁止所有下载。两个入口均可从仓库根目录或 `scripts` 目录运行。在根目录执行 `powershell -NoProfile -File tests/WindowsScriptsTest.ps1` 可验证工具查找逻辑，无需下载或构建。
+
 在 CPack 安装阶段，Qt CMake 部署 API 会运行 `windeployqt`，把所需 Qt DLL、编译器运行库、`qt.conf` 和平台插件放到应用旁边。生成的 ZIP 和 `.sha256` 文件位于 `build/release/packages/` 下独立的时间戳目录中，因此即使旧 ZIP 正被资源管理器或其他程序打开，也不会阻塞新包生成。脚本完成时会输出最终产物路径和哈希值。
 
 Scintilla 会静态编译进 `vinson-editor.exe`，无需单独的运行时 DLL。当前纯文本版本没有词法分析器库依赖。

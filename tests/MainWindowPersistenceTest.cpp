@@ -564,8 +564,12 @@ void MainWindowPersistenceTest::framelessWindowShrinksToOneLineAndTracksAppearan
     QVERIFY(theme != nullptr);
     window.show();
     QCoreApplication::processEvents();
+    const int framedEditorHeight = editor->viewport()->height();
+    const int framedWidth = window.width();
     controller->setFrameless(true);
-    QCoreApplication::processEvents();
+    QTRY_COMPARE(window.height(), framedEditorHeight);
+    QTRY_COMPARE(editor->viewport()->height(), framedEditorHeight);
+    QCOMPARE(window.width(), framedWidth);
     int lineHeight = static_cast<int>(std::ceil(editor->textHeightF(0)));
     QCOMPARE(window.minimumHeight(), lineHeight);
     window.resize(400, lineHeight);
@@ -1904,7 +1908,7 @@ void MainWindowPersistenceTest::titleBarMenusUseNativeFrames()
         QVERIFY(!menu->windowFlags().testFlag(Qt::NoDropShadowWindowHint));
         QVERIFY(!menu->findChild<QWidget*>(QStringLiteral("menuShadowOverflow")));
     }
-    QCOMPARE(window.menuBar()->actions().size(), 5);
+    QCOMPARE(window.menuBar()->actions().size(), 6);
     QVERIFY(menus.size() >= 7);
 }
 

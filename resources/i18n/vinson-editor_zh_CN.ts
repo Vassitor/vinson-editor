@@ -2,7 +2,136 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="zh_CN" sourcelanguage="en">
 <context>
+    <name>vinson::PluginSafety</name>
+    <message><source>Obfuscated code</source><translation>混淆代码</translation></message>
+    <message><source>Dynamic code execution</source><translation>动态代码执行</translation></message>
+    <message><source>System or module access</source><translation>系统或模块访问</translation></message>
+    <message><source>Network access</source><translation>网络访问</translation></message>
+    <message><source>File access or deletion</source><translation>文件访问或删除</translation></message>
+    <message><source>Encoded content</source><translation>编码内容</translation></message>
+    <message><source>Potential infinite loop</source><translation>可能的无限循环</translation></message>
+    <message><source>Escaped identifiers can hide the APIs being called and make review harder.</source><translation>转义标识符可能隐藏所调用的接口，使代码更难审查。</translation></message>
+    <message><source>Code can be generated or evaluated at runtime, hiding behavior from this static check. Generated code can still read or change the provided document text.</source><translation>代码可以在运行时生成或求值，使此静态检测无法识别其实际行为。生成的代码仍可读取或修改传入的文档文本。</translation></message>
+    <message><source>This code refers to modules or system commands that could execute programs or access the computer in a host with those APIs. These host APIs are not provided by the current plugin runtime.</source><translation>代码引用了模块或系统命令，在提供这些接口的宿主中可能执行程序或访问计算机。当前插件运行时不提供这些宿主接口。</translation></message>
+    <message><source>This code refers to network APIs that could send document text to a remote server in a host with those APIs. Network APIs are not provided by the current plugin runtime.</source><translation>代码引用了网络接口，在提供这些接口的宿主中可能将文档文本发送到远程服务器。当前插件运行时不提供网络接口。</translation></message>
+    <message><source>This code refers to file APIs that could read, overwrite or delete files in a host with those APIs. File APIs are not provided by the current plugin runtime.</source><translation>代码引用了文件接口，在提供这些接口的宿主中可能读取、覆盖或删除文件。当前插件运行时不提供文件接口。</translation></message>
+    <message><source>Decoded text may conceal executable code or destinations. Review how the decoded value is used; decoding alone is not necessarily harmful.</source><translation>解码后的文本可能隐藏可执行代码或目标地址。请检查解码结果的用途；解码操作本身不一定有害。</translation></message>
+    <message><source>A loop without a limiting condition can consume CPU or memory. Cancellation and the time limit reduce CPU stalls but cannot guarantee recovery from memory exhaustion. Check for a reachable break or return.</source><translation>没有限制条件的循环可能耗尽 CPU 或内存。取消和超时可减少 CPU 长时间占用，但无法保证从内存耗尽中恢复。请检查是否存在可执行到的 break 或 return。</translation></message>
+</context>
+<context>
+    <name>vinson::PluginConfigurationDialog</name>
+    <message><source>Plugin Settings: %1</source><translation>插件设置：%1</translation></message>
+    <message><source>This plugin has no settings.</source><translation>此插件没有专属设置。</translation></message>
+    <message><source>Settings</source><translation>设置</translation></message>
+    <message><source>Command Shortcuts</source><translation>命令快捷键</translation></message>
+    <message><source>Plugin Settings</source><translation>插件设置</translation></message>
+    <message><source>Use one key combination per command. Clear it to disable the shortcut. Shortcuts must not conflict with editor commands, styles or other enabled plugins.</source><translation>每个命令可设置一个组合键，清空即可取消快捷键。快捷键不能与编辑器命令、样式或其他已启用插件冲突。</translation></message>
+</context>
+<context>
+    <name>vinson::PluginParametersDialog</name>
+    <message><source>Set the options for this run.</source><translation>设置本次执行使用的参数。</translation></message>
+</context>
+<context>
+    <name>vinson::PluginDialog</name>
+    <message><source>Installed Plugins</source><translation>已安装插件</translation></message>
+    <message><source>Developer Guide</source><translation>开发文档</translation></message>
+    <message><source>Could not load the bundled developer guide.</source><translation>无法加载内置开发文档。</translation></message>
+    <message><source>Example Plugin Source</source><translation>示例插件源码</translation></message>
+    <message><source>Plugin Security Review</source><translation>插件安全检测</translation></message>
+    <message><source>Potential risks were found in %1 (%2). Review them before installing.</source><translation>在 %1（%2）中发现潜在风险，请在安装前查看详情。</translation></message>
+    <message><source>%1 — %2 (%3), script line %4
+%5
+Code: %6</source><translation>%1 — %2（%3），脚本第 %4 行
+%5
+代码：%6</translation></message>
+    <message><source>This static check does not execute commands and cannot detect every risk. Plugins can read or change the supplied text. The current runtime exposes no file, network or system APIs, but it runs inside the editor process and cannot guarantee protection from memory exhaustion. Only continue if you trust the author and accept these risks.</source><translation>此静态检测不会执行命令，也无法识别所有风险。插件可以读取或修改传入的文本。当前运行时不提供文件、网络或系统接口，但运行在编辑器进程内，无法保证防止内存耗尽。请仅在信任作者并接受这些风险时继续。</translation></message>
+    <message><source>Install Anyway</source><translation>仍然安装</translation></message>
+    <message><source>Up to 64 findings per command are shown.</source><translation>每个命令最多显示前 64 条检测结果。</translation></message>
+    <message><source>Plugin Settings…</source><translation>插件设置…</translation></message>
+    <message><source>Update Plugin</source><translation>更新插件</translation></message>
+    <message><source>Replace %1 (%2) with version %3? Settings and enabled state will be kept.</source><translation>将 %1（%2）替换为版本 %3？将保留设置和启用状态。</translation></message>
+    <message><source>Manage Plugins</source><translation>管理插件</translation></message>
+    <message><source>Import a .vinson-plugin package to add commands to the Plugins menu. Only install plugins from authors you trust. Commands can read and change the current document.</source><translation>导入 .vinson-plugin 插件包，将命令添加到“插件”菜单。请只安装可信作者的插件；插件命令可以读取和修改当前文档。</translation></message>
+    <message><source>Plugin</source><translation>插件</translation></message>
+    <message><source>Version</source><translation>版本</translation></message>
+    <message><source>Status</source><translation>状态</translation></message>
+    <message><source>Import Plugin…</source><translation>导入插件…</translation></message>
+    <message><source>Install Example</source><translation>安装示例</translation></message>
+    <message><source>Enable</source><translation>启用</translation></message>
+    <message><source>Disable</source><translation>停用</translation></message>
+    <message><source>Uninstall</source><translation>卸载</translation></message>
+    <message><source>Reload</source><translation>重新加载</translation></message>
+    <message><source>Open Plugin Folder</source><translation>打开插件文件夹</translation></message>
+    <message><source>Plugins</source><translation>插件</translation></message>
+    <message><source>Could not open the plugin folder.</source><translation>无法打开插件文件夹。</translation></message>
+    <message><source>Import Plugin</source><translation>导入插件</translation></message>
+    <message><source>Vinson plugins (*.vinson-plugin)</source><translation>Vinson 插件 (*.vinson-plugin)</translation></message>
+    <message><source>Uninstall Plugin</source><translation>卸载插件</translation></message>
+    <message><source>Uninstall %1?</source><translation>卸载 %1？</translation></message>
+    <message><source>Error</source><translation>错误</translation></message>
+    <message><source>Enabled</source><translation>已启用</translation></message>
+    <message><source>Disabled</source><translation>已停用</translation></message>
+    <message><source>No plugins installed. Import a package or install the example to get started.</source><translation>尚未安装插件。可导入插件包或安装示例。</translation></message>
+    <message><source>%1
+ID: %2 · %3 command(s)
+%4</source><translation>%1
+ID：%2 · %3 个命令
+%4</translation></message>
+    <message><source>%1
+%2</source><translation>%1
+%2</translation></message>
+</context>
+<context>
+    <name>vinson::PluginManager</name>
+    <message><source>Review the security findings and confirm this exact package before installing. If the package changed, scan it again.</source><translation>请先查看安全检测详情并确认此插件包，再进行安装。插件包发生变化时必须重新检测。</translation></message>
+    <message><source>Invalid plugin settings schema.</source><translation>插件设置格式无效。</translation></message>
+    <message><source>Invalid command shortcut or parameter schema.</source><translation>命令快捷键或参数格式无效。</translation></message>
+    <message><source>Invalid value for %1.</source><translation>%1 的值无效。</translation></message>
+    <message><source>Unknown plugin setting or parameter.</source><translation>未知的插件设置或参数。</translation></message>
+    <message><source>Cannot read plugin preferences. Repair preferences.json before saving settings.</source><translation>无法读取插件配置。保存设置前请修复 preferences.json。</translation></message>
+    <message><source>Could not save plugin preferences: %1</source><translation>无法保存插件配置：%1</translation></message>
+    <message><source>Use one key combination for %1; Escape is reserved for cancellation.</source><translation>%1 只能设置一个组合键；Esc 保留用于取消操作。</translation></message>
+    <message><source>Shortcut %1 for %2 is already in use.</source><translation>%2 的快捷键 %1 已被占用。</translation></message>
+    <message><source>Unknown plugin command shortcut.</source><translation>未知的插件命令快捷键。</translation></message>
+    <message><source>This plugin ID is already installed. Confirm replacement to update it.</source><translation>此插件 ID 已安装。确认替换即可更新。</translation></message>
+    <message><source>Cannot read plugin file.</source><translation>无法读取插件文件。</translation></message>
+    <message><source>Plugin packages must be at most 1 MiB.</source><translation>插件包不能超过 1 MiB。</translation></message>
+    <message><source>Invalid plugin JSON: %1</source><translation>插件 JSON 无效：%1</translation></message>
+    <message><source>Unsupported plugin API version; expected 1.</source><translation>不支持此插件 API 版本；需要版本 1。</translation></message>
+    <message><source>Invalid plugin ID, name, version or description.</source><translation>插件 ID、名称、版本或描述无效。</translation></message>
+    <message><source>A plugin must contain a commands array.</source><translation>插件必须包含 commands 命令数组。</translation></message>
+    <message><source>A plugin must contain between 1 and 32 commands.</source><translation>插件必须包含 1 至 32 个命令。</translation></message>
+    <message><source>Invalid or duplicate plugin command.</source><translation>插件命令无效或重复。</translation></message>
+    <message><source>Invalid script in %1: %2</source><translation>%1 中的脚本无效：%2</translation></message>
+    <message><source>Could not save plugin settings: %1</source><translation>无法保存插件设置：%1</translation></message>
+    <message><source>Duplicate plugin ID.</source><translation>插件 ID 重复。</translation></message>
+    <message><source>Wait for the running plugin command to finish.</source><translation>请等待正在执行的插件命令完成。</translation></message>
+    <message><source>This plugin ID is already installed. Uninstall it before importing another version.</source><translation>此插件 ID 已安装。导入其他版本前请先卸载。</translation></message>
+    <message><source>The plugin destination already exists or cannot be created.</source><translation>插件目标文件已存在或无法创建。</translation></message>
+    <message><source>Could not copy the plugin package.</source><translation>无法复制插件包。</translation></message>
+    <message><source>The plugin package changed during import. Try again.</source><translation>插件包在导入期间发生更改。请重试。</translation></message>
+    <message><source>Plugin is unavailable or a command is running.</source><translation>插件不可用或有命令正在执行。</translation></message>
+    <message><source>Could not remove the plugin package.</source><translation>无法删除插件包。</translation></message>
+    <message><source>Plugin input exceeds the 8 MiB limit.</source><translation>插件输入超过 8 MiB 限制。</translation></message>
+    <message><source>Plugin commands must return a string.</source><translation>插件命令必须返回字符串。</translation></message>
+    <message><source>Plugin output exceeds the 8 MiB limit.</source><translation>插件输出超过 8 MiB 限制。</translation></message>
+    <message><source>Plugin command cancelled or timed out.</source><translation>插件命令已取消或超时。</translation></message>
+    <message><source>Plugin command is unavailable or another command is running.</source><translation>插件命令不可用或有其他命令正在执行。</translation></message>
+</context>
+<context>
     <name>vinson::MainWindow</name>
+    <message><source>Plugin result copied to clipboard.</source><translation>插件结果已复制到剪贴板。</translation></message>
+    <message><source>Plugin result opened in a new tab.</source><translation>插件结果已在新标签页中打开。</translation></message>
+    <message><source>Shortcut %1 is already in use. Change it in plugin settings.</source><translation>快捷键 %1 已被占用，请在插件设置中修改。</translation></message>
+    <message><source>&amp;Plugins</source><translation>插件(&amp;P)</translation></message>
+    <message><source>Manage Plugins…</source><translation>管理插件…</translation></message>
+    <message><source>No enabled plugins</source><translation>没有已启用的插件</translation></message>
+    <message><source>Plugin Result</source><translation>插件结果</translation></message>
+    <message><source>Plugin command completed.</source><translation>插件命令已完成。</translation></message>
+    <message><source>Document changed; plugin result was discarded.</source><translation>文档已更改，已丢弃插件结果。</translation></message>
+    <message><source>Select text before running this plugin command.</source><translation>执行此插件命令前请先选择文本。</translation></message>
+    <message><source>Plugin text operations are limited to 8 MiB. Select a smaller range.</source><translation>插件文本操作限于 8 MiB。请选择较小的范围。</translation></message>
+    <message><source>Running plugin: %1…</source><translation>正在执行插件：%1…</translation></message>
     <message><source>Save &amp;Encoding</source><translation>保存编码(&amp;E)</translation></message>
     <message><source>Convert &amp;Line Endings</source><translation>转换换行符(&amp;L)</translation></message>
     <message><source>&amp;Bookmarks</source><translation>书签(&amp;B)</translation></message>

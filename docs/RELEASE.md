@@ -20,6 +20,24 @@ under `.build-tools/`; no system-wide installation is changed. Pass `-QtRoot`
 to use a specific Qt directory, or `-NoBootstrap` for an offline,
 already-provisioned environment.
 
+Tool discovery supports both `.build-tools/python` and the older
+`.build-tools/python-packages` layout. Qt discovery prefers `-QtRoot`, then the
+SDK recorded in the build's CMake cache, environment paths, and installed MSVC
+x64 SDKs under `.build-tools/Qt`, `C:\Qt`, or `D:\Qt`. It does not require the
+default bootstrap version to be installed.
+
+To build, deploy, and start the local Release executable, run
+`.\scripts\deploy-and-run-windows.ps1`. Add `-DeployOnly` to deploy without
+starting the app, or `-SkipBuild` to reuse an existing executable.
+
+To create an installer, run `.\scripts\package-installer-windows.ps1`. If NSIS
+is missing, the script downloads the pinned portable NSIS 3.12 release into
+`.build-tools/nsis` and verifies its SHA-256 before extraction. Use `-NsisRoot`
+to select an existing installation; `-NoBootstrap` disables all downloads.
+Both entry points work from the repository root or the `scripts` directory.
+Run `powershell -NoProfile -File tests/WindowsScriptsTest.ps1` from the root
+to check tool discovery without downloading or building anything.
+
 During CPack installation, Qt's CMake deployment API runs `windeployqt` and
 places the required Qt DLLs, compiler runtime, `qt.conf`, and platform plugins
 beside the application. The resulting ZIP and `.sha256` file are written to

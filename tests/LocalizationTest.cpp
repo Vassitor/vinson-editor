@@ -28,6 +28,22 @@ void LocalizationTest::loadsSimplifiedChineseTranslation()
              QStringLiteral("文件(&F)"));
     QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "Ready"),
              QStringLiteral("就绪"));
+    QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "&Plugins"),
+             QStringLiteral("插件(&P)"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginDialog", "Import Plugin…"),
+             QStringLiteral("导入插件…"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginDialog", "Developer Guide"),
+             QStringLiteral("开发文档"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginDialog", "Install Anyway"),
+             QStringLiteral("仍然安装"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginSafety", "Dynamic code execution"),
+             QStringLiteral("动态代码执行"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginConfigurationDialog", "Command Shortcuts"),
+             QStringLiteral("命令快捷键"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginParametersDialog", "Set the options for this run."),
+             QStringLiteral("设置本次执行使用的参数。"));
+    QCOMPARE(QCoreApplication::translate("vinson::PluginManager", "Plugin command cancelled or timed out."),
+             QStringLiteral("插件命令已取消或超时。"));
     QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "&Bookmarks"),
              QStringLiteral("书签(&B)"));
     QCOMPARE(QCoreApplication::translate("vinson::MainWindow", "&Next Bookmark"),

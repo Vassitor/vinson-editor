@@ -7,6 +7,7 @@ Vinson Editor 是一款使用 C++20、Qt 6 Widgets 和 Scintilla 构建的轻量
 ## 当前功能
 
 - 带菜单栏和状态栏的原生 Qt 6 桌面窗口
+- 自助导入和更新 JavaScript 文本插件，支持专属设置、命令快捷键、执行参数、当前行／选区／文档处理、复制结果及生成新标签页；后台执行可取消和撤销，内置 11 个文本工具命令，见[插件指南](docs/PLUGINS.zh-CN.md)
 - 直接从上游源码编译的 Scintilla 5.6.6 编辑控件
 - UTF-8 文本输入、撤销/重做、剪贴板操作、自动换行和行号
 - 当前文档会话的可停靠编辑历史时间线，标记当前/已保存状态并支持恢复
@@ -52,7 +53,7 @@ Vinson Editor 是一款使用 C++20、Qt 6 Widgets 和 Scintilla 构建的轻量
 - 64 位 C++20 编译器（MSVC 2022+、GCC 12+ 或 Clang 15+）
 - CMake 3.25+
 - Ninja
-- Qt 6.5+，包含 Widgets、Test 和 Core5Compat
+- Qt 6.5+，包含 Widgets、Test、Core5Compat 和 Qml
 - Qt Linguist Tools（可选；编译内置翻译时需要）
 
 Scintilla 5.6.6 的官方发布源码已包含在 `third_party/` 中。当前编辑器使用纯文本模式，无需额外的词法分析器库。
@@ -61,7 +62,7 @@ Scintilla 5.6.6 的官方发布源码已包含在 `third_party/` 中。当前编
 
 ```bash
 sudo apt update
-sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev
+sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev qt6-declarative-dev
 ```
 
 如需编译内置翻译，再安装：

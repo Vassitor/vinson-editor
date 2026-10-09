@@ -6,13 +6,13 @@
 
 主要发布目标是使用 MSVC 2022 或更新版本的 64 位 Windows。Linux 用于持续开发和可移植性检查。CMake 项目会拒绝 32 位配置。
 
-最低开发要求为 CMake 3.25、Ninja、C++20 编译器，以及包含 Core、Gui、Widgets、Test 和 Core5Compat 的 Qt 6.5。Qt Linguist Tools 是可选依赖；安装后会编译内置翻译并启用本地化测试。已记录的性能测试环境和测量结果见 [PERFORMANCE.zh-CN.md](PERFORMANCE.zh-CN.md)。
+最低开发要求为 CMake 3.25、Ninja、C++20 编译器，以及包含 Core、Gui、Widgets、Test、Core5Compat 和 Qml 的 Qt 6.5。Qt Linguist Tools 是可选依赖；安装后会编译内置翻译并启用本地化测试。已记录的性能测试环境和测量结果见 [PERFORMANCE.zh-CN.md](PERFORMANCE.zh-CN.md)。
 
 Ubuntu 环境配置：
 
 ```bash
 sudo apt update
-sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev
+sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev qt6-declarative-dev
 ```
 
 如需编译翻译：
@@ -57,6 +57,7 @@ ctest --preset debug
 - `src/search`：搜索/替换编排
 - `src/session`：最近文件、关闭标签历史及恢复快照
 - `src/settings`：外观主题和经过校验的 `QSettings` 持久化
+- `src/plugins`：插件校验、安装、状态保存和带超时的脚本执行
 - `src/ui`：职责集中的对话框和可复用 UI 组件
 - `tests`：Qt Test 源码、统一 CTest 注册和测试运行时部署
 - `benchmarks`：手动大文件性能测试及其 CMake 目标

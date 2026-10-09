@@ -32,6 +32,22 @@ Scintilla messages. `EditorWidget` is the boundary around the upstream widget;
 it owns encoding mode, styles, view options, text access, and notification
 translation into application-level Qt signals.
 
+`PluginManager` validates and copies single-file JSON/JavaScript packages into
+the user's application data directory and atomically persists enabled IDs.
+Typed settings and shortcut overrides live in a separate atomic preferences file.
+Package updates preserve this state; schema changes normalize incompatible values.
+`PluginFieldForm` renders the shared settings/parameter schema, with persistent
+configuration dialogs and transient command parameter dialogs. The host resolves
+shortcut collisions, records the selected input range and supplies byte-based
+editor metadata; outputs may also target the clipboard or a new unsaved tab.
+`PluginDialog` handles import and lifecycle operations; `MainWindow` builds menu
+commands and applies results through editor text APIs as one undo action.
+Each command uses a fresh `QJSEngine` on a worker thread, with no QObject or I/O
+APIs exposed. A GUI timer interrupts execution after three seconds; input and
+output are bounded to 8 MiB. The host locks editing and records document identity
+and revision to reject stale results. See [PLUGINS.md](PLUGINS.md) for API v1 and
+the limits of in-process resource isolation.
+
 `SearchController` translates user-level search state into the narrow search
 API exposed by `EditorWidget`. Searches use Scintilla target ranges directly,
 including forward/backward traversal and wrap-around, so neither the controller

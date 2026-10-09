@@ -10,6 +10,7 @@ modes, and a specialized large-document path.
 ## Current features
 
 - Native Qt 6 desktop window with menu and status bar
+- Import and update JavaScript text plugins with settings, command shortcuts, parameter forms, line/selection/document processing, clipboard and new-tab results; cancellable background execution and undo, 11 bundled Text Tools commands and a [plugin guide](docs/PLUGINS.md)
 - Scintilla 5.6.6 editing widget, compiled directly from upstream source
 - UTF-8 text input, undo/redo, clipboard actions, wrapping, and line numbers
 - Dockable per-document-session edit-history timeline with current/saved markers
@@ -59,7 +60,7 @@ modes, and a specialized large-document path.
 - A 64-bit C++20 compiler (MSVC 2022+, GCC 12+, or Clang 15+)
 - CMake 3.25+
 - Ninja
-- Qt 6.5+ with Widgets, Test, and Core5Compat
+- Qt 6.5+ with Widgets, Test, Core5Compat, and Qml
 - Qt Linguist Tools (optional; required to compile the bundled translations)
 
 Scintilla 5.6.6 is vendored under `third_party/` from its official source
@@ -69,7 +70,7 @@ On Ubuntu 26.04, install the development dependencies with:
 
 ```bash
 sudo apt update
-sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev
+sudo apt install cmake ninja-build qt6-base-dev qt6-base-dev-tools qt6-5compat-dev qt6-declarative-dev
 ```
 
 To compile the bundled translations, also install:
